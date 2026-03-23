@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { supabase } from "../../lib/supabase";
+import { createNote } from "../../lib/notes";
 import { useAuth } from "../../lib/auth";
 import { colors, fontSize, spacing, radius } from "../../lib/theme";
 
@@ -49,13 +49,7 @@ export default function CaptureScreen() {
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("notes").insert({
-        user_id: user.id,
-        content: trimmed,
-        status: "inbox",
-      });
-
-      if (error) throw error;
+      await createNote(user.id, trimmed);
 
       setContent("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
