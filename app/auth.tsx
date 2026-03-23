@@ -12,7 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth";
+import { supabase } from "../lib/supabase";
 import { colors, fontSize, spacing, radius } from "../lib/theme";
+
+const DEV_EMAIL = "test@test.com";
+const DEV_PASSWORD = "test123456";
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
@@ -20,6 +24,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -37,6 +42,41 @@ export default function AuthScreen() {
       Alert.alert("Error", error.message);
     } else if (isSignUp) {
       Alert.alert("Success", "Check your email to confirm your account!");
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setDevLoading(true);
+    try {
+      // Try signing in first
+      const { error: signInError } = await signIn(DEV_EMAIL, DEV_PASSWORD);
+      if (!signInError) {
+        setDevLoading(false);
+        return;
+      }
+
+      // If sign-in fails, create the test user via admin API (service role key)
+      const { error: createError } = await supabase.auth.admin.createUser({
+        email: DEV_EMAIL,
+        password: DEV_PASSWORD,
+        email_confirm: true,
+      });
+
+      if (createError && !createError.message.includes("already")) {
+        Alert.alert("Error", createError.message);
+        setDevLoading(false);
+        return;
+      }
+
+      // Now sign in
+      const { error } = await signIn(DEV_EMAIL, DEV_PASSWORD);
+      if (error) {
+        Alert.alert("Error", error.message);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Dev login failed");
+    } finally {
+      setDevLoading(false);
     }
   };
 
@@ -99,6 +139,28 @@ export default function AuthScreen() {
                 ? "Already have an account? Sign In"
                 : "Don't have an account? Sign Up"}
             </Text>
+          </TouchableOpacity>
+
+          {/* Dev Login */}
+          <View style={styles.devDivider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>DEV</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.devButton, devLoading && styles.buttonDisabled]}
+            onPress={handleDevLogin}
+            disabled={devLoading}
+            activeOpacity={0.8}
+          >
+            {devLoading ? (
+              <ActivityIndicator color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.devButtonText}>
+                ⚡ Dev Login (test@test.com)
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -169,5 +231,35 @@ const styles = StyleSheet.create({
   switchText: {
     color: colors.accent,
     fontSize: fontSize.sm,
+  },
+  devDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    fontWeight: "700",
+    marginHorizontal: spacing.md,
+    letterSpacing: 2,
+  },
+  devButton: {
+    backgroundColor: colors.warning + "20",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.warning + "40",
+  },
+  devButtonText: {
+    color: colors.warning,
+    fontSize: fontSize.md,
+    fontWeight: "700",
   },
 });
