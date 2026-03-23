@@ -3,6 +3,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "../lib/auth";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { colors } from "../lib/theme";
 
 function AuthGate() {
@@ -49,10 +50,12 @@ function AuthGate() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" />
-      <AuthProvider>
-        <AuthGate />
-      </AuthProvider>
+      <ErrorBoundary>
+        <StatusBar style="light" />
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

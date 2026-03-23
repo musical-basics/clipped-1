@@ -1,8 +1,12 @@
 import { Tabs } from "expo-router";
+import { TouchableOpacity, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../../lib/theme";
+import { useAuth } from "../../lib/auth";
+import { colors, fontSize, spacing } from "../../lib/theme";
 
 export default function TabLayout() {
+  const { signOut } = useAuth();
+
   return (
     <Tabs
       screenOptions={{
@@ -47,6 +51,15 @@ export default function TabLayout() {
           title: "Vault",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />
