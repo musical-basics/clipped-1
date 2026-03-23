@@ -7,22 +7,25 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import SwipeCard from "../../components/SwipeCard";
+import MergeSheet from "../../components/MergeSheet";
 import { supabase } from "../../lib/supabase";
-import { updateNoteStatus } from "../../lib/notes";
+import { updateNoteStatus, findSimilarNotes, mergeNotes } from "../../lib/notes";
 import { useAuth } from "../../lib/auth";
-import type { Note } from "../../lib/types";
+import type { Note, MatchResult } from "../../lib/types";
 import { colors, fontSize, spacing } from "../../lib/theme";
 
 export default function ReviewScreen() {
   const { user } = useAuth();
-  const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Merge state
   const [mergeNote, setMergeNote] = useState<Note | null>(null);
+  const [mergeMatches, setMergeMatches] = useState<MatchResult[]>([]);
+  const [mergeLoading, setMergeLoading] = useState(false);
 
   const loadInboxNotes = useCallback(async () => {
     if (!user) return;
@@ -71,10 +74,50 @@ export default function ReviewScreen() {
     advanceCard();
   };
 
-  const handleSwipeUp = (note: Note) => {
+  const handleSwipeUp = async (note: Note) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setMergeNote(note);
-    // Merge flow handled in Phase 6
+    setMergeLoading(true);
+    setMergeMatches([]);
+
+    try {
+      if (!note.embedding || !user) {
+        setMergeMatches([]);
+        return;
+      }
+      const matches = await findSimilarNotes(note.embedding, user.id);
+      setMergeMatches(matches);
+    } catch (err) {
+      console.error("Vector search error:", err);
+      setMergeMatches([]);
+    } finally {
+      setMergeLoading(false);
+    }
+  };
+
+  const handleMergeSelect = async (parentId: string) => {
+    if (!mergeNote) return;
+
+    try {
+      await mergeNotes(parentId, mergeNote);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      console.error("Merge error:", err);
+    }
+
+    setMergeNote(null);
+    setMergeMatches([]);
+    advanceCard();
+  };
+
+  const handleMergeClose = () => {
+    setMergeNote(null);
+    setMergeMatches([]);
+    // If user closes merge sheet without selecting, store the note instead
+    if (mergeNote) {
+      updateNoteStatus(mergeNote.id, "stored").catch(console.error);
+      advanceCard();
+    }
   };
 
   const remainingNotes = notes.slice(currentIndex);
@@ -135,7 +178,8 @@ export default function ReviewScreen() {
           .slice(0, 3)
           .reverse()
           .map((note, reverseIdx) => {
-            const stackIndex = Math.min(remainingNotes.length - 1, 2) - reverseIdx;
+            const stackIndex =
+              Math.min(remainingNotes.length - 1, 2) - reverseIdx;
             return (
               <SwipeCard
                 key={note.id}
@@ -148,6 +192,14 @@ export default function ReviewScreen() {
             );
           })}
       </View>
+
+      <MergeSheet
+        visible={mergeNote !== null}
+        matches={mergeMatches}
+        loading={mergeLoading}
+        onSelect={handleMergeSelect}
+        onClose={handleMergeClose}
+      />
     </SafeAreaView>
   );
 }
