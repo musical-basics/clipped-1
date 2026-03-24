@@ -31,7 +31,9 @@
       "repomix-output.*",
       "android/**",
       "ios/**",
-      "*.map"
+      "*.map",
+      "_v0_data/**",
+      "supabase/**"
     ]
   }
 }
