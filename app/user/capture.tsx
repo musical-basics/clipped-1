@@ -231,13 +231,15 @@ export default function CaptureScreen() {
         {recentNotes.length > 0 && (
           <View style={styles.recentSection}>
             <Text style={styles.recentLabel}>Recent</Text>
-            {recentNotes.map((n) => (
-              <View key={n.id} style={styles.recentNoteCard}>
-                <Text style={styles.recentNote} numberOfLines={1}>
-                  {n.content.slice(0, 40)}{n.content.length > 40 ? "…" : ""}
-                </Text>
-              </View>
-            ))}
+            <View style={styles.recentRow}>
+              {recentNotes.map((n) => (
+                <View key={n.id} style={styles.recentNoteCard}>
+                  <Text style={styles.recentNote} numberOfLines={2}>
+                    {n.content.slice(0, 30)}{n.content.length > 30 ? "…" : ""}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -389,13 +391,18 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
       textTransform: "uppercase",
       letterSpacing: 1,
-      marginBottom: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    recentRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     recentNote: {
       color: colors.textSecondary,
       fontSize: fontSize.sm,
     },
     recentNoteCard: {
+      flex: 1,
       backgroundColor: colors.bgElevated ?? colors.bgCard,
       borderRadius: radius.lg,
       paddingHorizontal: spacing.md,
