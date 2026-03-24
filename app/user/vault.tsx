@@ -487,7 +487,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     toast: {
       position: "absolute",
-      bottom: 70,
+      top: 100,
       left: spacing.lg,
       right: spacing.lg,
       backgroundColor: colors.warning + "15",
