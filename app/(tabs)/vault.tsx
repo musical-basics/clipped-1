@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,7 @@ import {
   StyleSheet,
   TextInput,
   RefreshControl,
-  Alert,
-  Platform,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -17,8 +16,10 @@ import * as Haptics from "expo-haptics";
 import { supabase } from "../../lib/supabase";
 import { updateNoteStatus } from "../../lib/notes";
 import { useAuth } from "../../lib/auth";
+import { useThemeColors } from "../../lib/ThemeContext";
 import type { Note } from "../../lib/types";
-import { colors, fontSize, spacing, radius } from "../../lib/theme";
+import { fontSize, spacing, radius } from "../../lib/theme";
+import type { ThemeColors } from "../../lib/theme";
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -35,10 +36,13 @@ function timeAgo(dateStr: string): string {
 export default function VaultScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [deleteToast, setDeleteToast] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
   const loadNotes = useCallback(async () => {
     if (!user) return;
@@ -70,7 +74,7 @@ export default function VaultScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await updateNoteStatus(noteId, "archived");
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    setDeleteToast("Moved to recently deleted. Will be completely deleted in 30 days.");
+    setDeleteToast("Moved to recently deleted. Will be permanently deleted after 30 days.");
     setTimeout(() => setDeleteToast(null), 3000);
   };
 
@@ -80,7 +84,7 @@ export default function VaultScreen() {
       )
     : notes;
 
-  const renderItem = ({ item }: { item: Note }) => {
+  const renderListItem = ({ item }: { item: Note }) => {
     const lines = item.content.split("\n");
     const title = lines[0].slice(0, 60);
     const preview = item.content.slice(0, 100);
@@ -113,6 +117,37 @@ export default function VaultScreen() {
     );
   };
 
+  const renderGridItem = ({ item }: { item: Note }) => {
+    const title = item.content.split("\n")[0].slice(0, 40);
+    const preview = item.content.slice(0, 80);
+
+    return (
+      <TouchableOpacity
+        style={styles.gridCard}
+        onPress={() => router.push(`/note/${item.id}`)}
+        activeOpacity={0.7}
+      >
+        <View>
+          <Text style={styles.gridCardTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.gridCardPreview} numberOfLines={4}>
+            {preview}
+          </Text>
+        </View>
+        <View style={styles.gridCardFooter}>
+          <Text style={styles.noteTime}>{timeAgo(item.updated_at)}</Text>
+          <TouchableOpacity
+            style={styles.gridDeleteBtn}
+            onPress={() => handleDelete(item.id)}
+          >
+            <Text style={{ fontSize: 14 }}>🗑</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -126,7 +161,19 @@ export default function VaultScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Vault</Text>
         </View>
-        <Text style={styles.count}>{notes.length} notes</Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.count}>{notes.length} notes</Text>
+          <TouchableOpacity
+            style={styles.viewToggle}
+            onPress={() => setViewMode(viewMode === "list" ? "grid" : "list")}
+          >
+            <Ionicons
+              name={viewMode === "list" ? "grid-outline" : "list-outline"}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -152,11 +199,11 @@ export default function VaultScreen() {
               : "Start capturing and reviewing to fill your vault!"}
           </Text>
         </View>
-      ) : (
+      ) : viewMode === "list" ? (
         <FlatList
           data={filteredNotes}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          renderItem={renderListItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -167,6 +214,24 @@ export default function VaultScreen() {
             />
           }
         />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.gridContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
+            />
+          }
+        >
+          {filteredNotes.map((item) => (
+            <View key={item.id} style={styles.gridCardWrapper}>
+              {renderGridItem({ item })}
+            </View>
+          ))}
+        </ScrollView>
       )}
 
       {deleteToast && (
@@ -178,139 +243,198 @@ export default function VaultScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: fontSize.hero,
-    fontWeight: "800",
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  backText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    fontWeight: "600",
-  },
-  count: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    fontWeight: "600",
-  },
-  searchContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  searchInput: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    paddingHorizontal: spacing.lg,
-    color: colors.textPrimary,
-    fontSize: fontSize.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-  },
-  noteCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  noteCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  noteCardLeft: {
-    flex: 1,
-  },
-  noteDeleteBtn: {
-    backgroundColor: colors.error + "30",
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.error + "50",
-  },
-  noteDeleteText: {
-    fontSize: 14,
-    color: colors.error,
-  },
-  noteTitle: {
-    color: colors.textPrimary,
-    fontSize: fontSize.md,
-    fontWeight: "700",
-    marginBottom: spacing.xs,
-  },
-  notePreview: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    lineHeight: 20,
-    marginBottom: spacing.sm,
-  },
-  noteTime: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.lg,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontSize: fontSize.xl,
-    fontWeight: "700",
-    marginBottom: spacing.sm,
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    textAlign: "center",
-  },
-  toast: {
-    position: "absolute",
-    bottom: 100,
-    left: spacing.lg,
-    right: spacing.lg,
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-  },
-  toastText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    textAlign: "center",
-  },
-});
+const GRID_GAP = 12;
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+    },
+    headerRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    backButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    backText: {
+      color: colors.textSecondary,
+      fontSize: fontSize.sm,
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: fontSize.xxl,
+      fontWeight: "900",
+    },
+    count: {
+      color: colors.textMuted,
+      fontSize: fontSize.sm,
+      fontWeight: "600",
+    },
+    viewToggle: {
+      padding: spacing.xs,
+      borderRadius: radius.sm,
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    searchContainer: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    searchInput: {
+      backgroundColor: colors.bgCard,
+      color: colors.textPrimary,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      fontSize: fontSize.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    list: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xxl,
+      gap: spacing.sm,
+    },
+    noteCard: {
+      backgroundColor: colors.bgCard,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      paddingHorizontal: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    noteCardContent: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    noteCardLeft: {
+      flex: 1,
+    },
+    noteTitle: {
+      color: colors.textPrimary,
+      fontSize: fontSize.md,
+      fontWeight: "700",
+      marginBottom: spacing.xs,
+    },
+    notePreview: {
+      color: colors.textSecondary,
+      fontSize: fontSize.sm,
+      marginBottom: spacing.xs,
+    },
+    noteTime: {
+      color: colors.textMuted,
+      fontSize: fontSize.xs,
+    },
+    noteDeleteBtn: {
+      backgroundColor: colors.error + "20",
+      width: 36,
+      height: 36,
+      borderRadius: radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.error + "40",
+      marginLeft: spacing.sm,
+    },
+    noteDeleteText: {
+      fontSize: 16,
+    },
+    // Grid layout
+    gridContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      padding: spacing.lg,
+      gap: GRID_GAP,
+      paddingBottom: spacing.xxl,
+    },
+    gridCardWrapper: {
+      width: "31%",
+    },
+    gridCard: {
+      backgroundColor: colors.bgCard,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      aspectRatio: 0.85,
+      justifyContent: "space-between",
+    },
+    gridCardTitle: {
+      color: colors.textPrimary,
+      fontSize: fontSize.sm,
+      fontWeight: "700",
+      marginBottom: spacing.xs,
+    },
+    gridCardPreview: {
+      color: colors.textSecondary,
+      fontSize: fontSize.xs,
+      lineHeight: 18,
+    },
+    gridCardFooter: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    gridDeleteBtn: {
+      backgroundColor: colors.error + "20",
+      width: 28,
+      height: 28,
+      borderRadius: radius.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.error + "40",
+    },
+    // Empty + Toast
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: spacing.xl,
+    },
+    emptyEmoji: {
+      fontSize: 64,
+      marginBottom: spacing.lg,
+    },
+    emptyTitle: {
+      color: colors.textPrimary,
+      fontSize: fontSize.xl,
+      fontWeight: "700",
+      marginBottom: spacing.sm,
+    },
+    emptySubtitle: {
+      color: colors.textSecondary,
+      fontSize: fontSize.md,
+      textAlign: "center",
+    },
+    toast: {
+      position: "absolute",
+      bottom: 100,
+      left: spacing.lg,
+      right: spacing.lg,
+      backgroundColor: colors.bgCard,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+    },
+    toastText: {
+      color: colors.textSecondary,
+      fontSize: fontSize.sm,
+      textAlign: "center",
+    },
+  });

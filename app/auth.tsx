@@ -14,8 +14,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth";
 import { colors, fontSize, spacing, radius } from "../lib/theme";
 
-const DEV_EMAIL = "yulionel829@gmail.com";
-const DEV_PASSWORD = "test123456";
+// Dev credentials only available in development builds
+const DEV_EMAIL = __DEV__ ? "yulionel829@gmail.com" : "";
+const DEV_PASSWORD = __DEV__ ? "test123456" : "";
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();

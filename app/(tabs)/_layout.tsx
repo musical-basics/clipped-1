@@ -1,9 +1,9 @@
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
-import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
+import { Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth";
-import { colors, fontSize, spacing } from "../../lib/theme";
+import { useThemeColors } from "../../lib/ThemeContext";
 
 const TAB_ROUTES = [
   "/(tabs)/capture",
@@ -16,6 +16,7 @@ export default function TabLayout() {
   const { signOut } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const { colors } = useThemeColors();
 
   // Tab key to switch between work tabs (web only)
   useEffect(() => {
@@ -28,7 +29,6 @@ export default function TabLayout() {
         const currentTab = (segments as string[])[1] || "index";
         const currentIdx = TAB_NAMES.indexOf(currentTab as string);
         if (currentIdx === -1) {
-          // On home, go to first work tab
           router.replace(TAB_ROUTES[0]);
           return;
         }
@@ -65,7 +65,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          href: null, // Hidden from tab bar
+          href: null,
         }}
       />
       <Tabs.Screen

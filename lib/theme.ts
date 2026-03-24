@@ -1,10 +1,11 @@
-import { StyleSheet } from "react-native";
-
 /**
- * Design tokens for the TriageNotes app.
- * Dark-first palette with accent colors for swipe actions.
+ * Design tokens for the Clipped app.
+ * Dual palette: dark-first + cream "atelier" light mode.
  */
-export const colors = {
+
+export type ThemeColors = typeof darkColors;
+
+export const darkColors = {
   // Backgrounds
   bg: "#0A0A0F",
   bgCard: "#16161F",
@@ -32,6 +33,37 @@ export const colors = {
   error: "#FF4D6A",
 };
 
+export const lightColors: ThemeColors = {
+  // Backgrounds — warm cream "atelier" palette
+  bg: "#F5F0E6",
+  bgCard: "#FFFFFF",
+  bgElevated: "#EDE7DA",
+  bgInput: "#FEFCF8",
+
+  // Text — warm browns
+  textPrimary: "#2C2416",
+  textSecondary: "#6B5E4D",
+  textMuted: "#9B8E7D",
+
+  // Accents — keep purple for brand consistency
+  accent: "#6B4EE6",
+  accentLight: "#8B72F0",
+
+  // Swipe action colors
+  swipeDelete: "#E5395D",
+  swipeKeep: "#00B87A",
+  swipeMerge: "#3D8FE0",
+
+  // Utility
+  border: "#D9D0C3",
+  success: "#00B87A",
+  warning: "#E5A033",
+  error: "#E5395D",
+};
+
+// Static fallbacks (used by components that haven't migrated to context yet)
+export const colors = darkColors;
+
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -58,30 +90,3 @@ export const radius = {
   xl: 24,
   full: 9999,
 };
-
-export const globalStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  textInput: {
-    color: colors.textPrimary,
-    fontSize: fontSize.lg,
-    backgroundColor: colors.bgInput,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-});
