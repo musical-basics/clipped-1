@@ -131,6 +131,38 @@ export default function ReviewScreen() {
     return () => document.removeEventListener("wheel", handleWheel);
   }, [notes, currentIndex, viewMode]);
 
+  // Keyboard shortcuts for card mode (web)
+  const keyProcessing = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web" || viewMode !== "card") return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (keyProcessing.current || !currentNoteRef.current) return;
+      // Don't trigger if typing in an input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      const note = currentNoteRef.current;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        keyProcessing.current = true;
+        handleSwipeRight(note);
+        setTimeout(() => { keyProcessing.current = false; }, 600);
+      } else if (e.key === " ") {
+        e.preventDefault();
+        keyProcessing.current = true;
+        handleSwipeUp(note);
+        setTimeout(() => { keyProcessing.current = false; }, 600);
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        keyProcessing.current = true;
+        handleSwipeLeft(note);
+        setTimeout(() => { keyProcessing.current = false; }, 600);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [notes, currentIndex, viewMode]);
+
   const advanceCard = () => {
     setTimeout(() => {
       setCurrentIndex((prev) => prev + 1);
@@ -288,8 +320,9 @@ export default function ReviewScreen() {
               activeOpacity={0.6}
             >
               <Text style={[styles.hint, { color: colors.swipeDelete }]}>
-                ← Delete
-              </Text>
+            ← Delete{"\n"}
+            <Text style={styles.shortcutHint}>[⌫]</Text>
+          </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.hintButton}
@@ -297,8 +330,9 @@ export default function ReviewScreen() {
               activeOpacity={0.6}
             >
               <Text style={[styles.hint, { color: colors.swipeMerge }]}>
-                ↑ Merge
-              </Text>
+            ↑ Merge{"\n"}
+            <Text style={styles.shortcutHint}>[space]</Text>
+          </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.hintButton}
@@ -306,8 +340,9 @@ export default function ReviewScreen() {
               activeOpacity={0.6}
             >
               <Text style={[styles.hint, { color: colors.swipeKeep }]}>
-                Keep →
-              </Text>
+            Keep →{"\n"}
+            <Text style={styles.shortcutHint}>[enter]</Text>
+          </Text>
             </TouchableOpacity>
           </View>
 
@@ -473,6 +508,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: "600",
     opacity: 0.7,
+    textAlign: "center",
+  },
+  shortcutHint: {
+    fontSize: fontSize.xs,
+    opacity: 0.5,
+    fontWeight: "400",
   },
   hintButton: {
     paddingVertical: spacing.sm,
