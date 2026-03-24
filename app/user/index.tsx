@@ -28,23 +28,25 @@ export default function HomeScreen() {
         <Text style={styles.startButtonText}>Start Working</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.settingsLink}
-        onPress={() => router.push("/user/settings")}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
-        <Text style={styles.settingsLinkText}>Settings</Text>
-      </TouchableOpacity>
+      <View style={styles.secondaryButtons}>
+        <TouchableOpacity
+          style={styles.cardButton}
+          onPress={() => router.push("/user/settings")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.cardButtonText}>Settings</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.helpLink}
-        onPress={() => router.push("/user/settings")}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="help-circle-outline" size={18} color={colors.textMuted} />
-        <Text style={styles.helpLinkText}>Help</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.cardButton}
+          onPress={() => router.push("/user/settings")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.cardButtonText}>Help</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={{ flex: 1 }} />
 
@@ -77,7 +79,7 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: spacing.xs,
     },
     startButton: {
-      backgroundColor: colors.accent,
+      backgroundColor: colors.textPrimary,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -86,23 +88,33 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: radius.xl,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
+      shadowOpacity: 0.1,
       shadowRadius: 12,
       elevation: 8,
     },
     startButtonText: {
-      color: "#FFFFFF",
+      color: colors.bg,
       fontSize: fontSize.xl,
       fontWeight: "800",
     },
-    settingsLink: {
+    secondaryButtons: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      marginTop: spacing.lg,
+    },
+    cardButton: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: spacing.xs,
-      marginTop: spacing.lg,
+      gap: spacing.sm,
+      backgroundColor: colors.bgCard,
+      paddingVertical: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    settingsLinkText: {
+    cardButtonText: {
       color: colors.textSecondary,
       fontSize: fontSize.md,
       fontWeight: "600",
@@ -112,17 +124,5 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       textAlign: "center",
       marginBottom: spacing.md,
-    },
-    helpLink: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: spacing.xs,
-      marginTop: spacing.sm,
-    },
-    helpLinkText: {
-      color: colors.textMuted,
-      fontSize: fontSize.md,
-      fontWeight: "600",
     },
   });
