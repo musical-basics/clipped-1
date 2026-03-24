@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth";
-import { supabase } from "../lib/supabase";
 import { colors, fontSize, spacing, radius } from "../lib/theme";
 
 const DEV_EMAIL = "test@test.com";
@@ -55,15 +54,11 @@ export default function AuthScreen() {
         return;
       }
 
-      // If sign-in fails, create the test user via admin API (service role key)
-      const { error: createError } = await supabase.auth.admin.createUser({
-        email: DEV_EMAIL,
-        password: DEV_PASSWORD,
-        email_confirm: true,
-      });
+      // If sign-in fails, create the test user via signUp (client-safe)
+      const { error: signUpError } = await signUp(DEV_EMAIL, DEV_PASSWORD);
 
-      if (createError && !createError.message.includes("already")) {
-        Alert.alert("Error", createError.message);
+      if (signUpError && !signUpError.message.includes("already")) {
+        Alert.alert("Error", signUpError.message);
         setDevLoading(false);
         return;
       }

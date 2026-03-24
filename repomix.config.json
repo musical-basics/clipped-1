@@ -1,0 +1,35 @@
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml"
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "node_modules/**",
+      ".git/**",
+      ".DS_Store",
+      "pnpm-lock.yaml",
+      "assets/**",
+      "*.png",
+      "*.jpg",
+      "*.jpeg",
+      "*.gif",
+      "*.svg",
+      "*.ico",
+      "*.webp",
+      "*.mp4",
+      "*.mp3",
+      "*.wav",
+      "*.ttf",
+      "*.woff",
+      "*.woff2",
+      "*.eot",
+      ".env",
+      ".env.local",
+      ".expo/**",
+      "repomix-output.xml"
+    ]
+  }
+}
