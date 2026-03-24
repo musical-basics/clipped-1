@@ -29,6 +29,7 @@
       ".git/**",
       ".gemini/**",
       "repomix-output.*",
+      "clipped1-repomix-output.*",
       "android/**",
       "ios/**",
       "*.map",
