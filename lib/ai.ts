@@ -1,4 +1,5 @@
 // AI helper functions for embedding generation and note cleanup
+import { Platform } from "react-native";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const CLEANUP_MODEL = "gpt-4o-mini";
@@ -19,6 +20,10 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("EXPO_PUBLIC_OPENAI_API_KEY is not set");
+  }
+
+  if (Platform.OS === "web") {
+    throw new Error("AI features require the native app (OpenAI blocks browser requests)");
   }
 
   const response = await fetch("https://api.openai.com/v1/embeddings", {
@@ -60,6 +65,10 @@ export async function cleanupNote(content: string): Promise<CleanupResult> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("EXPO_PUBLIC_OPENAI_API_KEY is not set");
+  }
+
+  if (Platform.OS === "web") {
+    throw new Error("AI Clean Up requires the native app. OpenAI blocks browser requests due to CORS.");
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {

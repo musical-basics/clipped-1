@@ -28,7 +28,7 @@ function Navbar({ onFeatures, onPricing, onGetAccess }: { onFeatures: () => void
           <TouchableOpacity onPress={onFeatures}><Text style={s.navLink}>Features</Text></TouchableOpacity>
           <TouchableOpacity onPress={onPricing}><Text style={s.navLink}>Pricing</Text></TouchableOpacity>
         </View>
-        <TouchableOpacity style={s.navCta} onPress={onGetAccess}><Text style={s.navCtaText}>Get Access</Text></TouchableOpacity>
+        <TouchableOpacity style={s.navCta} onPress={onGetAccess}><Text style={s.navCtaText}>Get Early Access</Text></TouchableOpacity>
       </View>
     </View>
   );

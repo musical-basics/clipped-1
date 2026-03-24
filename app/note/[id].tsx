@@ -110,7 +110,7 @@ export default function NoteDetailScreen() {
         setCleanupCost(null);
       }, 10000);
     } catch (err) {
-      Alert.alert("Cleanup Failed", "Please try again.");
+      Alert.alert("Cleanup Failed", err instanceof Error ? err.message : "Please try again.");
       console.error("Cleanup error:", err);
     } finally {
       setCleaning(false);
