@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -21,7 +21,9 @@ import { supabase } from "../../lib/supabase";
 import { updateNoteStatus, findSimilarNotes, mergeNotes } from "../../lib/notes";
 import { useAuth } from "../../lib/auth";
 import type { Note, MatchResult } from "../../lib/types";
-import { colors, fontSize, spacing, radius } from "../../lib/theme";
+import { useThemeColors } from "../../lib/ThemeContext";
+import { fontSize, spacing, radius } from "../../lib/theme";
+import type { ThemeColors } from "../../lib/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_COLS = 3;
@@ -34,6 +36,8 @@ type ViewMode = "card" | "grid";
 export default function ReviewScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -527,7 +531,8 @@ export default function ReviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

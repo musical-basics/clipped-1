@@ -20,7 +20,9 @@ import { supabase } from "../../lib/supabase";
 import { updateNoteContent, updateNoteStatus } from "../../lib/notes";
 import { cleanupNote } from "../../lib/ai";
 import { generateAndStoreEmbedding } from "../../lib/notes";
-import { colors, fontSize, spacing, radius } from "../../lib/theme";
+import { useThemeColors } from "../../lib/ThemeContext";
+import { fontSize, spacing, radius } from "../../lib/theme";
+import type { ThemeColors } from "../../lib/theme";
 import type { Note } from "../../lib/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -39,6 +41,8 @@ function debounce<T extends (...args: any[]) => any>(
 export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [note, setNote] = useState<Note | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -240,7 +244,8 @@ export default function NoteDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
