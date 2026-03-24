@@ -7,9 +7,12 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  ScrollView,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import SwipeCard from "../../components/SwipeCard";
 import MergeSheet from "../../components/MergeSheet";
@@ -17,13 +20,22 @@ import { supabase } from "../../lib/supabase";
 import { updateNoteStatus, findSimilarNotes, mergeNotes } from "../../lib/notes";
 import { useAuth } from "../../lib/auth";
 import type { Note, MatchResult } from "../../lib/types";
-import { colors, fontSize, spacing } from "../../lib/theme";
+import { colors, fontSize, spacing, radius } from "../../lib/theme";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const GRID_COLS = 3;
+const GRID_GAP = spacing.sm;
+const GRID_CARD_WIDTH =
+  (SCREEN_WIDTH - spacing.lg * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+
+type ViewMode = "card" | "grid";
 
 export default function ReviewScreen() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("card");
 
   // Merge state
   const [mergeNote, setMergeNote] = useState<Note | null>(null);
@@ -82,43 +94,50 @@ export default function ReviewScreen() {
   const currentNoteRef = useRef<Note | null>(null);
   currentNoteRef.current = remainingNotes[0] || null;
 
-  // Mouse wheel gestures (web)
+  // Mouse wheel gestures (web, card mode only)
   const wheelProcessing = useRef(false);
   useEffect(() => {
-    if (Platform.OS !== "web") return;
+    if (Platform.OS !== "web" || viewMode !== "card") return;
     const handleWheel = (e: WheelEvent) => {
       if (wheelProcessing.current || !currentNoteRef.current) return;
       const THRESHOLD = 50;
       const note = currentNoteRef.current;
 
       if (e.deltaY < -THRESHOLD) {
-        // Scroll up → merge
         e.preventDefault();
         wheelProcessing.current = true;
         handleSwipeUp(note);
-        setTimeout(() => { wheelProcessing.current = false; }, 800);
+        setTimeout(() => {
+          wheelProcessing.current = false;
+        }, 800);
       } else if (e.deltaX > THRESHOLD) {
-        // Scroll right → keep
         e.preventDefault();
         wheelProcessing.current = true;
         handleSwipeRight(note);
-        setTimeout(() => { wheelProcessing.current = false; }, 800);
+        setTimeout(() => {
+          wheelProcessing.current = false;
+        }, 800);
       } else if (e.deltaX < -THRESHOLD) {
-        // Scroll left → delete
         e.preventDefault();
         wheelProcessing.current = true;
         handleSwipeLeft(note);
-        setTimeout(() => { wheelProcessing.current = false; }, 800);
+        setTimeout(() => {
+          wheelProcessing.current = false;
+        }, 800);
       }
     };
     document.addEventListener("wheel", handleWheel, { passive: false });
     return () => document.removeEventListener("wheel", handleWheel);
-  }, [notes, currentIndex]);
+  }, [notes, currentIndex, viewMode]);
 
   const advanceCard = () => {
     setTimeout(() => {
       setCurrentIndex((prev) => prev + 1);
     }, 350);
+  };
+
+  const removeFromGrid = (noteId: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
   };
 
   const handleSwipeLeft = async (note: Note) => {
@@ -129,7 +148,7 @@ export default function ReviewScreen() {
     } catch (err) {
       console.error("Archive error:", err);
     }
-    advanceCard();
+    viewMode === "card" ? advanceCard() : removeFromGrid(note.id);
   };
 
   const handleSwipeRight = async (note: Note) => {
@@ -140,7 +159,7 @@ export default function ReviewScreen() {
     } catch (err) {
       console.error("Store error:", err);
     }
-    advanceCard();
+    viewMode === "card" ? advanceCard() : removeFromGrid(note.id);
   };
 
   const handleSwipeUp = async (note: Note) => {
@@ -175,20 +194,23 @@ export default function ReviewScreen() {
       console.error("Merge error:", err);
     }
 
+    const mergedId = mergeNote.id;
     setMergeNote(null);
     setMergeMatches([]);
-    advanceCard();
+    viewMode === "card" ? advanceCard() : removeFromGrid(mergedId);
   };
 
   const handleMergeClose = () => {
+    const noteToStore = mergeNote;
     setMergeNote(null);
     setMergeMatches([]);
-    // If user closes merge sheet without selecting, store the note instead
-    if (mergeNote) {
-      updateNoteStatus(mergeNote.id, "stored").catch(console.error);
+    if (noteToStore && viewMode === "card") {
+      updateNoteStatus(noteToStore.id, "stored").catch(console.error);
       advanceCard();
     }
   };
+
+  // ---------- Render ----------
 
   if (loading) {
     return (
@@ -226,60 +248,143 @@ export default function ReviewScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Review</Text>
-        <Text style={styles.counter}>
-          {currentIndex + 1} / {notes.length}
-        </Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.counter}>
+            {viewMode === "card"
+              ? `${currentIndex + 1} / ${notes.length}`
+              : `${remainingNotes.length} notes`}
+          </Text>
+          <TouchableOpacity
+            onPress={() =>
+              setViewMode(viewMode === "card" ? "grid" : "card")
+            }
+            style={styles.viewToggle}
+          >
+            <Ionicons
+              name={viewMode === "card" ? "grid-outline" : "layers-outline"}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={styles.hints}>
-        <TouchableOpacity
-          style={styles.hintButton}
-          onPress={() => currentNote && handleSwipeLeft(currentNote)}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.hint, { color: colors.swipeDelete }]}>
-            ← Delete
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.hintButton}
-          onPress={() => currentNote && handleSwipeUp(currentNote)}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.hint, { color: colors.swipeMerge }]}>
-            ↑ Merge
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.hintButton}
-          onPress={() => currentNote && handleSwipeRight(currentNote)}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.hint, { color: colors.swipeKeep }]}>
-            Keep →
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {viewMode === "card" ? (
+        <>
+          <View style={styles.hints}>
+            <TouchableOpacity
+              style={styles.hintButton}
+              onPress={() => currentNote && handleSwipeLeft(currentNote)}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.hint, { color: colors.swipeDelete }]}>
+                ← Delete
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.hintButton}
+              onPress={() => currentNote && handleSwipeUp(currentNote)}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.hint, { color: colors.swipeMerge }]}>
+                ↑ Merge
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.hintButton}
+              onPress={() => currentNote && handleSwipeRight(currentNote)}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.hint, { color: colors.swipeKeep }]}>
+                Keep →
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-      <View style={styles.cardContainer}>
-        {remainingNotes
-          .slice(0, 3)
-          .reverse()
-          .map((note, reverseIdx) => {
-            const stackIndex =
-              Math.min(remainingNotes.length - 1, 2) - reverseIdx;
-            return (
-              <SwipeCard
-                key={note.id}
-                content={note.content}
-                index={stackIndex}
-                onSwipeLeft={() => handleSwipeLeft(note)}
-                onSwipeRight={() => handleSwipeRight(note)}
-                onSwipeUp={() => handleSwipeUp(note)}
-              />
-            );
-          })}
-      </View>
+          <View style={styles.cardContainer}>
+            {remainingNotes
+              .slice(0, 3)
+              .reverse()
+              .map((note, reverseIdx) => {
+                const stackIndex =
+                  Math.min(remainingNotes.length - 1, 2) - reverseIdx;
+                return (
+                  <SwipeCard
+                    key={note.id}
+                    content={note.content}
+                    index={stackIndex}
+                    onSwipeLeft={() => handleSwipeLeft(note)}
+                    onSwipeRight={() => handleSwipeRight(note)}
+                    onSwipeUp={() => handleSwipeUp(note)}
+                  />
+                );
+              })}
+          </View>
+        </>
+      ) : (
+        <ScrollView
+          style={styles.gridScroll}
+          contentContainerStyle={styles.gridContent}
+        >
+          {remainingNotes.map((note) => (
+            <View key={note.id} style={styles.gridCard}>
+              <Text style={styles.gridCardText} numberOfLines={5}>
+                {note.content}
+              </Text>
+              <View style={styles.gridActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.gridActionBtn,
+                    { backgroundColor: colors.swipeDelete + "20" },
+                  ]}
+                  onPress={() => handleSwipeLeft(note)}
+                >
+                  <Text
+                    style={[
+                      styles.gridActionText,
+                      { color: colors.swipeDelete },
+                    ]}
+                  >
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridActionBtn,
+                    { backgroundColor: colors.swipeMerge + "20" },
+                  ]}
+                  onPress={() => handleSwipeUp(note)}
+                >
+                  <Text
+                    style={[
+                      styles.gridActionText,
+                      { color: colors.swipeMerge },
+                    ]}
+                  >
+                    ↑
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridActionBtn,
+                    { backgroundColor: colors.swipeKeep + "20" },
+                  ]}
+                  onPress={() => handleSwipeRight(note)}
+                >
+                  <Text
+                    style={[
+                      styles.gridActionText,
+                      { color: colors.swipeKeep },
+                    ]}
+                  >
+                    ✓
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -317,6 +422,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
   title: {
     color: colors.textPrimary,
     fontSize: fontSize.hero,
@@ -326,6 +436,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSize.md,
     fontWeight: "600",
+  },
+  viewToggle: {
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bgElevated,
   },
   hints: {
     flexDirection: "row",
@@ -347,6 +462,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  // Grid layout
+  gridScroll: {
+    flex: 1,
+  },
+  gridContent: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    padding: spacing.lg,
+    gap: GRID_GAP,
+  },
+  gridCard: {
+    width: GRID_CARD_WIDTH,
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: GRID_CARD_WIDTH * 1.1,
+    justifyContent: "space-between",
+  },
+  gridCardText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+    flex: 1,
+  },
+  gridActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  gridActionBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.sm,
+  },
+  gridActionText: {
+    fontSize: fontSize.md,
+    fontWeight: "700",
+  },
+  // Empty state
   emptyEmoji: {
     fontSize: 72,
     marginBottom: spacing.lg,
