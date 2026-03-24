@@ -6,14 +6,17 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth";
 import { backfillEmbeddings } from "../../lib/notes";
 import { colors, fontSize, spacing, radius } from "../../lib/theme";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
   const [backfilling, setBackfilling] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
@@ -80,12 +83,11 @@ export default function SettingsScreen() {
               theme === "light" && styles.themeOptionActive,
             ]}
             onPress={() => {
-              setTheme("light");
-              Alert.alert(
-                "Coming Soon",
-                "Light mode is coming in a future update!"
-              );
-              setTheme("dark");
+              if (Platform.OS === "web") {
+                window.alert("Coming Soon: Light mode is coming in a future update!");
+              } else {
+                Alert.alert("Coming Soon", "Light mode is coming in a future update!");
+              }
             }}
           >
             <Text
@@ -118,6 +120,20 @@ export default function SettingsScreen() {
               </Text>
             </>
           )}
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>DATA</Text>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push("/recently-deleted")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.cardTitle}>🗑 Recently Deleted</Text>
+          <Text style={styles.cardDescription}>
+            View and restore deleted notes (auto-removed after 30 days)
+          </Text>
         </TouchableOpacity>
       </View>
 

@@ -38,6 +38,7 @@ export default function VaultScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteToast, setDeleteToast] = useState<string | null>(null);
 
   const loadNotes = useCallback(async () => {
     if (!user) return;
@@ -66,18 +67,11 @@ export default function VaultScreen() {
   };
 
   const handleDelete = async (noteId: string) => {
-    const confirmed = Platform.OS === "web"
-      ? window.confirm("Archive this note?")
-      : await new Promise<boolean>((resolve) =>
-          Alert.alert("Archive Note", "Move this note to archive?", [
-            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-            { text: "Archive", style: "destructive", onPress: () => resolve(true) },
-          ])
-        );
-    if (!confirmed) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await updateNoteStatus(noteId, "archived");
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    setDeleteToast("Moved to recently deleted. Will be completely deleted in 30 days.");
+    setTimeout(() => setDeleteToast(null), 3000);
   };
 
   const filteredNotes = search.trim()
@@ -173,6 +167,12 @@ export default function VaultScreen() {
             />
           }
         />
+      )}
+
+      {deleteToast && (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>{deleteToast}</Text>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -294,6 +294,23 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
+    textAlign: "center",
+  },
+  toast: {
+    position: "absolute",
+    bottom: 100,
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  toastText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
     textAlign: "center",
   },
 });

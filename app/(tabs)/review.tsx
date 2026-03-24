@@ -132,17 +132,20 @@ export default function ReviewScreen() {
     return () => document.removeEventListener("wheel", handleWheel);
   }, [notes, currentIndex, viewMode]);
 
-  // Keyboard shortcuts for card mode (web)
+  // Keyboard shortcuts for card + grid mode (web)
   const keyProcessing = useRef(false);
   useEffect(() => {
-    if (Platform.OS !== "web" || viewMode !== "card") return;
+    if (Platform.OS !== "web") return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (keyProcessing.current || !currentNoteRef.current) return;
+      if (keyProcessing.current) return;
       // Don't trigger if typing in an input
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-      const note = currentNoteRef.current;
+      // In card mode, use current card; in grid mode, use first note
+      const note = viewMode === "card" ? currentNoteRef.current : notes[0];
+      if (!note) return;
+
       if (e.key === "Enter") {
         e.preventDefault();
         keyProcessing.current = true;
@@ -598,6 +601,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    width: "100%",
   },
   // Grid layout
   gridScroll: {
@@ -610,13 +615,13 @@ const styles = StyleSheet.create({
     gap: GRID_GAP,
   },
   gridCard: {
-    width: GRID_CARD_WIDTH,
+    width: "31%",
     backgroundColor: colors.bgCard,
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: GRID_CARD_WIDTH * 1.1,
+    aspectRatio: 0.9,
     justifyContent: "space-between",
   },
   gridCardText: {

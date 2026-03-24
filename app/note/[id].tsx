@@ -126,16 +126,6 @@ export default function NoteDetailScreen() {
 
   const handleDelete = async () => {
     if (!id) return;
-    const confirmed = Platform.OS === "web"
-      ? window.confirm("Delete this note? It will be archived.")
-      : await new Promise<boolean>((resolve) =>
-          Alert.alert("Delete Note", "This note will be archived.", [
-            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-            { text: "Delete", style: "destructive", onPress: () => resolve(true) },
-          ])
-        );
-    if (!confirmed) return;
-
     setDeleting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     await updateNoteStatus(id, "archived");

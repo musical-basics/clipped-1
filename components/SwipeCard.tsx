@@ -157,7 +157,9 @@ export default function SwipeCard({
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
-    width: SCREEN_WIDTH - spacing.lg * 2,
+    width: "90%",
+    maxWidth: 500,
+    alignSelf: "center",
     minHeight: 300,
     backgroundColor: colors.bgCard,
     borderRadius: radius.xl,
