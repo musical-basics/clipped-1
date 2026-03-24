@@ -152,6 +152,8 @@ export default function ReviewScreen() {
     );
   }
 
+  const currentNote = remainingNotes[0];
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -162,15 +164,33 @@ export default function ReviewScreen() {
       </View>
 
       <View style={styles.hints}>
-        <Text style={[styles.hint, { color: colors.swipeDelete }]}>
-          ← Delete
-        </Text>
-        <Text style={[styles.hint, { color: colors.swipeMerge }]}>
-          ↑ Merge
-        </Text>
-        <Text style={[styles.hint, { color: colors.swipeKeep }]}>
-          Keep →
-        </Text>
+        <TouchableOpacity
+          style={styles.hintButton}
+          onPress={() => currentNote && handleSwipeLeft(currentNote)}
+          activeOpacity={0.6}
+        >
+          <Text style={[styles.hint, { color: colors.swipeDelete }]}>
+            ← Delete
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.hintButton}
+          onPress={() => currentNote && handleSwipeUp(currentNote)}
+          activeOpacity={0.6}
+        >
+          <Text style={[styles.hint, { color: colors.swipeMerge }]}>
+            ↑ Merge
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.hintButton}
+          onPress={() => currentNote && handleSwipeRight(currentNote)}
+          activeOpacity={0.6}
+        >
+          <Text style={[styles.hint, { color: colors.swipeKeep }]}>
+            Keep →
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.cardContainer}>
@@ -242,6 +262,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: "600",
     opacity: 0.7,
+  },
+  hintButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   cardContainer: {
     flex: 1,

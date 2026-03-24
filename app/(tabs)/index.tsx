@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,8 @@ export default function CaptureScreen() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const checkmarkOpacity = useRef(new Animated.Value(0)).current;
+  const contentRef = useRef(content);
+  contentRef.current = content;
 
   const showSuccess = () => {
     Animated.sequence([
@@ -62,6 +64,21 @@ export default function CaptureScreen() {
       setSaving(false);
     }
   };
+
+  // Cmd+Enter / Ctrl+Enter to save (web)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (contentRef.current.trim()) {
+          handleSave();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [user]);
 
   return (
     <SafeAreaView style={styles.container}>
