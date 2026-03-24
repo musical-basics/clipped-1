@@ -396,12 +396,12 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: fontSize.sm,
     },
     recentNoteCard: {
-      backgroundColor: colors.bgCard,
-      borderRadius: radius.md,
+      backgroundColor: colors.bgElevated ?? colors.bgCard,
+      borderRadius: radius.lg,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      marginBottom: spacing.xs,
-      borderWidth: 1,
-      borderColor: colors.border,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
+      borderWidth: 1.5,
+      borderColor: colors.accent + "30",
     },
   });
