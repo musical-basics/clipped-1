@@ -5,27 +5,36 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth";
 import { colors, fontSize, spacing } from "../../lib/theme";
 
-const TAB_ROUTES = ["/(tabs)", "/(tabs)/review", "/(tabs)/vault"] as const;
-const TAB_NAMES = ["index", "review", "vault"];
+const TAB_ROUTES = [
+  "/(tabs)/capture",
+  "/(tabs)/review",
+  "/(tabs)/vault",
+] as const;
+const TAB_NAMES = ["capture", "review", "vault"];
 
 export default function TabLayout() {
   const { signOut } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
-  // Tab key to switch between tabs (web only)
+  // Tab key to switch between work tabs (web only)
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Tab") {
-        // Don't intercept if user is in an input with Cmd/Ctrl held (e.g. Cmd+Tab)
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         e.preventDefault();
 
         const currentTab = (segments as string[])[1] || "index";
         const currentIdx = TAB_NAMES.indexOf(currentTab as string);
+        if (currentIdx === -1) {
+          // On home, go to first work tab
+          router.replace(TAB_ROUTES[0]);
+          return;
+        }
         const direction = e.shiftKey ? -1 : 1;
-        const nextIdx = (currentIdx + direction + TAB_ROUTES.length) % TAB_ROUTES.length;
+        const nextIdx =
+          (currentIdx + direction + TAB_ROUTES.length) % TAB_ROUTES.length;
         router.replace(TAB_ROUTES[nextIdx]);
       }
     };
@@ -56,6 +65,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="capture"
+        options={{
           title: "Capture",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="add-circle-outline" size={size} color={color} />
@@ -83,10 +101,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
-          ),
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

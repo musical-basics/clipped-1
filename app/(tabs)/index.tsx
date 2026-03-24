@@ -1,149 +1,123 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Animated,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
-import { createNote } from "../../lib/notes";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth";
+import { backfillEmbeddings } from "../../lib/notes";
 import { colors, fontSize, spacing, radius } from "../../lib/theme";
 
-export default function CaptureScreen() {
-  const { user } = useAuth();
-  const [content, setContent] = useState("");
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<TextInput>(null);
-  const checkmarkOpacity = useRef(new Animated.Value(0)).current;
-  const contentRef = useRef(content);
-  contentRef.current = content;
+export default function HomeScreen() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const [backfilling, setBackfilling] = useState(false);
 
-  const showSuccess = () => {
-    Animated.sequence([
-      Animated.timing(checkmarkOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(800),
-      Animated.timing(checkmarkOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: signOut,
+      },
+    ]);
   };
 
-  const handleSave = async () => {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
-
+  const handleBackfill = async () => {
     if (!user) return;
-
-    setSaving(true);
+    setBackfilling(true);
     try {
-      await createNote(user.id, trimmed);
-
-      setContent("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showSuccess();
-      inputRef.current?.focus();
+      const count = await backfillEmbeddings(user.id);
+      Alert.alert("Done", `${count} note(s) had their embeddings generated.`);
     } catch (err) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      console.error("Save error:", err);
+      Alert.alert("Error", "Backfill failed. Check your API key.");
     } finally {
-      setSaving(false);
+      setBackfilling(false);
     }
   };
-
-  // Cmd+Enter / Ctrl+Enter to save (web)
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        e.stopPropagation();
-        const trimmed = contentRef.current.trim();
-        if (!trimmed || !user) return;
-        setSaving(true);
-        try {
-          await createNote(user.id, trimmed);
-          setContent("");
-          contentRef.current = "";
-          showSuccess();
-          inputRef.current?.focus();
-        } catch (err) {
-          console.error("Save error:", err);
-        } finally {
-          setSaving(false);
-        }
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [user]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      <View style={styles.hero}>
+        <Text style={styles.appName}>Clipped</Text>
+        <Text style={styles.tagline}>Capture · Review · Organize</Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.startButton}
+        onPress={() => router.push("/(tabs)/capture")}
+        activeOpacity={0.8}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Capture</Text>
-          <Text style={styles.subtitle}>What's on your mind?</Text>
+        <Ionicons name="flash" size={24} color={colors.textPrimary} />
+        <Text style={styles.startButtonText}>Start Working</Text>
+      </TouchableOpacity>
+
+      <View style={styles.quickLinks}>
+        <TouchableOpacity
+          style={styles.quickLink}
+          onPress={() => router.push("/(tabs)/review")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="layers-outline" size={20} color={colors.swipeMerge} />
+          <Text style={styles.quickLinkText}>Review Inbox</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickLink}
+          onPress={() => router.push("/(tabs)/vault")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="library-outline" size={20} color={colors.swipeKeep} />
+          <Text style={styles.quickLinkText}>Open Vault</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>SETTINGS</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.label}>Email</Text>
+          <Text style={styles.value}>{user?.email ?? "—"}</Text>
         </View>
 
-        <View style={styles.inputContainer}>
-          <TextInput
-            ref={inputRef}
-            style={styles.textInput}
-            placeholder="Type your thought..."
-            placeholderTextColor={colors.textMuted}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            autoFocus
-            textAlignVertical="top"
-            scrollEnabled
-          />
-          {content.length > 0 && (
-            <Text style={styles.charCount}>{content.length}</Text>
+        <TouchableOpacity
+          style={[styles.card, { marginTop: spacing.sm }]}
+          onPress={handleBackfill}
+          disabled={backfilling}
+          activeOpacity={0.7}
+        >
+          {backfilling ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : (
+            <>
+              <Text style={styles.cardTitle}>🔄 Backfill Embeddings</Text>
+              <Text style={styles.cardDescription}>
+                Generate missing embeddings for notes
+              </Text>
+            </>
           )}
-        </View>
+        </TouchableOpacity>
+      </View>
 
-        <View style={styles.bottomBar}>
-          <Animated.View
-            style={[styles.successBadge, { opacity: checkmarkOpacity }]}
-          >
-            <Text style={styles.successText}>✓ Saved to Inbox</Text>
-          </Animated.View>
+      <View style={{ flex: 1 }} />
 
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              (!content.trim() || saving) && styles.saveButtonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={!content.trim() || saving}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? "Saving..." : "Save"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      <TouchableOpacity
+        style={styles.signOutButton}
+        onPress={handleSignOut}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.signOutText}>Sign Out</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.version}>Clipped v1.0.0</Text>
     </SafeAreaView>
   );
 }
@@ -152,79 +126,127 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
-  },
-  keyboardView: {
-    flex: 1,
     padding: spacing.lg,
   },
-  header: {
-    marginBottom: spacing.lg,
+  hero: {
+    alignItems: "center",
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xl,
   },
-  title: {
+  appName: {
     color: colors.textPrimary,
-    fontSize: fontSize.hero,
-    fontWeight: "800",
+    fontSize: 48,
+    fontWeight: "900",
+    letterSpacing: -1,
   },
-  subtitle: {
+  tagline: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
     marginTop: spacing.xs,
   },
-  inputContainer: {
-    flex: 1,
-    position: "relative",
-  },
-  textInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: fontSize.lg,
-    lineHeight: 28,
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    paddingTop: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    textAlignVertical: "top",
-  },
-  charCount: {
-    position: "absolute",
-    bottom: spacing.sm,
-    right: spacing.md,
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-  },
-  bottomBar: {
+  startButton: {
+    backgroundColor: colors.accent,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: spacing.md,
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.xl,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  successBadge: {
-    backgroundColor: colors.success + "20",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+  startButtonText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.xl,
+    fontWeight: "800",
   },
-  successText: {
-    color: colors.success,
+  quickLinks: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  quickLink: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.bgCard,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickLinkText: {
+    color: colors.textSecondary,
     fontSize: fontSize.sm,
     fontWeight: "600",
   },
-  saveButton: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.full,
-    minWidth: 100,
-    alignItems: "center",
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xl,
   },
-  saveButtonDisabled: {
-    opacity: 0.4,
+  section: {
+    marginBottom: spacing.md,
   },
-  saveButtonText: {
+  sectionTitle: {
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
+  card: {
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  label: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    marginBottom: spacing.xs,
+  },
+  value: {
     color: colors.textPrimary,
     fontSize: fontSize.md,
+    fontWeight: "600",
+  },
+  cardTitle: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: "600",
+    marginBottom: spacing.xs,
+  },
+  cardDescription: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+  },
+  signOutButton: {
+    backgroundColor: colors.error + "20",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.error + "40",
+  },
+  signOutText: {
+    color: colors.error,
+    fontSize: fontSize.md,
     fontWeight: "700",
+  },
+  version: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: "center",
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
 });

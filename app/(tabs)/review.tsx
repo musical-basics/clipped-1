@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import SwipeCard from "../../components/SwipeCard";
@@ -32,6 +32,7 @@ type ViewMode = "card" | "grid";
 
 export default function ReviewScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -247,7 +248,16 @@ export default function ReviewScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Review</Text>
+        <View>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace("/(tabs)")}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
+            <Text style={styles.backText}>Home</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Review</Text>
+        </View>
         <View style={styles.headerRight}>
           <Text style={styles.counter}>
             {viewMode === "card"
@@ -426,6 +436,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  backText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
   },
   title: {
     color: colors.textPrimary,

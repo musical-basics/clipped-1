@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { supabase } from "../../lib/supabase";
 import { updateNoteStatus } from "../../lib/notes";
@@ -110,7 +111,16 @@ export default function VaultScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Vault</Text>
+        <View>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace("/(tabs)")}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
+            <Text style={styles.backText}>Home</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Vault</Text>
+        </View>
         <Text style={styles.count}>{notes.length} notes</Text>
       </View>
 
@@ -173,6 +183,17 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: fontSize.hero,
     fontWeight: "800",
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  backText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
   },
   count: {
     color: colors.textSecondary,
