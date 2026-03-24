@@ -62,6 +62,7 @@ assets/
   favicon.png
   icon.png
   splash-icon.png
+  splash.png
 components/
   ErrorBoundary.tsx
   MergeSheet.tsx
@@ -85,6 +86,9 @@ lib/
   theme.ts
   ThemeContext.tsx
   types.ts
+public/
+  icon.png
+  splash.png
 .gitignore
 .npmrc
 app.json
@@ -208,405 +212,6 @@ export default function TabLayout() {
 }
 </file>
 
-<file path="app/user/capture.tsx">
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Animated,
-  Dimensions,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { createNote } from "../../lib/notes";
-import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
-import { useThemeColors } from "../../lib/ThemeContext";
-import { fontSize, spacing, radius } from "../../lib/theme";
-import type { ThemeColors } from "../../lib/theme";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-export default function CaptureScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const { colors } = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const [content, setContent] = useState("");
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<TextInput>(null);
-  const checkmarkOpacity = useRef(new Animated.Value(0)).current;
-  const contentRef = useRef(content);
-  contentRef.current = content;
-
-  // Recent notes
-  const [recentNotes, setRecentNotes] = useState<{ id: string; content: string }[]>([]);
-
-  const loadRecentNotes = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("notes")
-      .select("id, content")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(3);
-    if (data) setRecentNotes(data);
-  }, [user]);
-
-  useEffect(() => {
-    loadRecentNotes();
-  }, [loadRecentNotes]);
-
-  // Flying note animation state
-  const [flyingText, setFlyingText] = useState<string | null>(null);
-  const flyX = useRef(new Animated.Value(0)).current;
-  const flyY = useRef(new Animated.Value(0)).current;
-  const flyOpacity = useRef(new Animated.Value(1)).current;
-  const flyScale = useRef(new Animated.Value(1)).current;
-
-  const showFlyingNote = (text: string) => {
-    setFlyingText(text.length > 40 ? text.slice(0, 40) + "…" : text);
-    flyX.setValue(0);
-    flyY.setValue(0);
-    flyOpacity.setValue(1);
-    flyScale.setValue(1);
-
-    Animated.parallel([
-      Animated.timing(flyX, {
-        toValue: SCREEN_WIDTH + 50,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(flyY, {
-        toValue: -30,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(flyScale, {
-        toValue: 0.3,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.delay(300),
-        Animated.timing(flyOpacity, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => setFlyingText(null));
-  };
-
-  const showSuccess = () => {
-    Animated.sequence([
-      Animated.timing(checkmarkOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(800),
-      Animated.timing(checkmarkOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handleSave = async () => {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
-
-    if (!user) return;
-
-    setSaving(true);
-    try {
-      await createNote(user.id, trimmed);
-      showFlyingNote(trimmed);
-      setContent("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showSuccess();
-      inputRef.current?.focus();
-      loadRecentNotes();
-    } catch (err) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      console.error("Save error:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Cmd+Enter / Ctrl+Enter to save (web)
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        e.stopPropagation();
-        const trimmed = contentRef.current.trim();
-        if (!trimmed || !user) return;
-        setSaving(true);
-        try {
-          await createNote(user.id, trimmed);
-          showFlyingNote(trimmed);
-          setContent("");
-          contentRef.current = "";
-          showSuccess();
-          inputRef.current?.focus();
-        } catch (err) {
-          console.error("Save error:", err);
-        } finally {
-          setSaving(false);
-        }
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [user]);
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-      >
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.replace("/user")}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={20}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.backText}>Home</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Capture</Text>
-          <Text style={styles.subtitle}>What's on your mind?</Text>
-        </View>
-
-        <View style={styles.inputContainer}>
-          <TextInput
-            ref={inputRef}
-            style={styles.textInput}
-            placeholder="Type your thought..."
-            placeholderTextColor={colors.textMuted}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            autoFocus
-            textAlignVertical="top"
-            scrollEnabled
-          />
-          {content.length > 0 && (
-            <Text style={styles.charCount}>{content.length}</Text>
-          )}
-        </View>
-
-        <View style={styles.bottomBar}>
-          <Animated.View
-            style={[styles.successBadge, { opacity: checkmarkOpacity }]}
-          >
-            <Text style={styles.successText}>✓ Saved to Inbox</Text>
-          </Animated.View>
-
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              (!content.trim() || saving) && styles.saveButtonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={!content.trim() || saving}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? "Saving..." : "Save"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentNotes.length > 0 && (
-          <View style={styles.recentSection}>
-            <Text style={styles.recentLabel}>Recent</Text>
-            {recentNotes.map((n) => (
-              <Text key={n.id} style={styles.recentNote} numberOfLines={1}>
-                {n.content.slice(0, 40)}{n.content.length > 40 ? "…" : ""}
-              </Text>
-            ))}
-          </View>
-        )}
-      </KeyboardAvoidingView>
-
-      {/* Flying note animation */}
-      {flyingText && (
-        <Animated.View
-          style={[
-            styles.flyingNote,
-            {
-              opacity: flyOpacity,
-              transform: [
-                { translateX: flyX },
-                { translateY: flyY },
-                { scale: flyScale },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.flyingNoteText} numberOfLines={1}>
-            {flyingText}
-          </Text>
-        </Animated.View>
-      )}
-    </SafeAreaView>
-  );
-}
-
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.bg,
-    },
-    keyboardView: {
-      flex: 1,
-      padding: spacing.lg,
-    },
-    header: {
-      marginBottom: spacing.lg,
-    },
-    backButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      marginBottom: spacing.sm,
-    },
-    backText: {
-      color: colors.textSecondary,
-      fontSize: fontSize.sm,
-      fontWeight: "600",
-    },
-    title: {
-      color: colors.textPrimary,
-      fontSize: fontSize.hero,
-      fontWeight: "800",
-    },
-    subtitle: {
-      color: colors.textSecondary,
-      fontSize: fontSize.md,
-      marginTop: spacing.xs,
-    },
-    inputContainer: {
-      flex: 1,
-      position: "relative",
-    },
-    textInput: {
-      flex: 1,
-      color: colors.textPrimary,
-      fontSize: fontSize.lg,
-      lineHeight: 28,
-      backgroundColor: colors.bgCard,
-      borderRadius: radius.lg,
-      padding: spacing.lg,
-      paddingTop: spacing.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      textAlignVertical: "top",
-    },
-    charCount: {
-      position: "absolute",
-      bottom: spacing.sm,
-      right: spacing.md,
-      color: colors.textMuted,
-      fontSize: fontSize.xs,
-    },
-    bottomBar: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingTop: spacing.md,
-    },
-    successBadge: {
-      backgroundColor: colors.success + "20",
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.full,
-    },
-    successText: {
-      color: colors.success,
-      fontSize: fontSize.sm,
-      fontWeight: "600",
-    },
-    saveButton: {
-      backgroundColor: colors.accent,
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.md,
-      borderRadius: radius.full,
-      minWidth: 100,
-      alignItems: "center",
-    },
-    saveButtonDisabled: {
-      opacity: 0.4,
-    },
-    saveButtonText: {
-      color: colors.textPrimary,
-      fontSize: fontSize.md,
-      fontWeight: "700",
-    },
-    flyingNote: {
-      position: "absolute",
-      top: "45%",
-      left: spacing.lg,
-      backgroundColor: colors.bgCard,
-      borderRadius: radius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderWidth: 1,
-      borderColor: colors.accent + "60",
-      maxWidth: 200,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-    },
-    flyingNoteText: {
-      color: colors.textPrimary,
-      fontSize: fontSize.sm,
-    },
-    recentSection: {
-      marginTop: spacing.md,
-      paddingTop: spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-    },
-    recentLabel: {
-      color: colors.textMuted,
-      fontSize: fontSize.xs,
-      fontWeight: "700",
-      textTransform: "uppercase",
-      letterSpacing: 1,
-      marginBottom: spacing.xs,
-    },
-    recentNote: {
-      color: colors.textSecondary,
-      fontSize: fontSize.sm,
-      paddingVertical: spacing.xs,
-    },
-  });
-</file>
-
 <file path="app/user/index.tsx">
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
@@ -715,730 +320,6 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: spacing.md,
     },
   });
-</file>
-
-<file path="app/user/review.tsx">
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  Animated,
-  Platform,
-  ScrollView,
-  Dimensions,
-  useWindowDimensions,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import SwipeCard from "../../components/SwipeCard";
-import MergeSheet from "../../components/MergeSheet";
-import { supabase } from "../../lib/supabase";
-import { updateNoteStatus, findSimilarNotes, mergeNotes } from "../../lib/notes";
-import { useAuth } from "../../lib/auth";
-import type { Note, MatchResult } from "../../lib/types";
-import { colors, fontSize, spacing, radius } from "../../lib/theme";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const GRID_COLS = 3;
-const GRID_GAP = spacing.sm;
-const GRID_CARD_WIDTH =
-  (SCREEN_WIDTH - spacing.lg * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
-
-type ViewMode = "card" | "grid";
-
-export default function ReviewScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>("card");
-
-  // Merge state
-  const [mergeNote, setMergeNote] = useState<Note | null>(null);
-  const [mergeMatches, setMergeMatches] = useState<MatchResult[]>([]);
-  const [mergeLoading, setMergeLoading] = useState(false);
-
-  // Toast state
-  const [toast, setToast] = useState<string | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastTimer = useRef<NodeJS.Timeout>();
-
-  const showToast = (message: string) => {
-    setToast(message);
-    toastOpacity.setValue(0);
-    Animated.timing(toastOpacity, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => {
-      Animated.timing(toastOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => setToast(null));
-    }, 1500);
-  };
-
-  const loadInboxNotes = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("notes")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("status", "inbox")
-      .order("created_at", { ascending: true });
-
-    if (!error && data) {
-      setNotes(data as Note[]);
-      setCurrentIndex(0);
-    }
-    setLoading(false);
-  }, [user]);
-
-  // Auto-refresh when tab gains focus
-  useFocusEffect(
-    useCallback(() => {
-      loadInboxNotes();
-    }, [loadInboxNotes])
-  );
-
-  // Track current note in a ref for wheel handler
-  const remainingNotes = notes.slice(currentIndex);
-  const currentNoteRef = useRef<Note | null>(null);
-  currentNoteRef.current = remainingNotes[0] || null;
-
-  // Mouse wheel gestures (web, card mode only)
-  const wheelProcessing = useRef(false);
-  useEffect(() => {
-    if (Platform.OS !== "web" || viewMode !== "card") return;
-    const handleWheel = (e: WheelEvent) => {
-      if (wheelProcessing.current || !currentNoteRef.current) return;
-      const THRESHOLD = 50;
-      const note = currentNoteRef.current;
-
-      if (e.deltaY < -THRESHOLD) {
-        e.preventDefault();
-        wheelProcessing.current = true;
-        handleSwipeUp(note);
-        setTimeout(() => {
-          wheelProcessing.current = false;
-        }, 800);
-      } else if (e.deltaX > THRESHOLD) {
-        e.preventDefault();
-        wheelProcessing.current = true;
-        handleSwipeRight(note);
-        setTimeout(() => {
-          wheelProcessing.current = false;
-        }, 800);
-      } else if (e.deltaX < -THRESHOLD) {
-        e.preventDefault();
-        wheelProcessing.current = true;
-        handleSwipeLeft(note);
-        setTimeout(() => {
-          wheelProcessing.current = false;
-        }, 800);
-      }
-    };
-    document.addEventListener("wheel", handleWheel, { passive: false });
-    return () => document.removeEventListener("wheel", handleWheel);
-  }, [notes, currentIndex, viewMode]);
-
-  // Keyboard shortcuts for card + grid mode (web)
-  const keyProcessing = useRef(false);
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (keyProcessing.current) return;
-      // Don't trigger if typing in an input
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-
-      // In card mode, use current card; in grid mode, use first note
-      const note = viewMode === "card" ? currentNoteRef.current : notes[0];
-      if (!note) return;
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        keyProcessing.current = true;
-        handleSwipeRight(note);
-        setTimeout(() => { keyProcessing.current = false; }, 600);
-      } else if (e.key === " ") {
-        e.preventDefault();
-        keyProcessing.current = true;
-        handleSwipeUp(note);
-        setTimeout(() => { keyProcessing.current = false; }, 600);
-      } else if (e.key === "Backspace") {
-        e.preventDefault();
-        keyProcessing.current = true;
-        handleSwipeLeft(note);
-        setTimeout(() => { keyProcessing.current = false; }, 600);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [notes, currentIndex, viewMode]);
-
-  const advanceCard = () => {
-    setTimeout(() => {
-      setCurrentIndex((prev) => prev + 1);
-    }, 350);
-  };
-
-  const removeFromGrid = (noteId: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
-  };
-
-  // Action animation state
-  const [actionAnim, setActionAnim] = useState<{ text: string; type: "delete" | "keep" } | null>(null);
-  const actionX = useRef(new Animated.Value(0)).current;
-  const actionY = useRef(new Animated.Value(0)).current;
-  const actionOpacity = useRef(new Animated.Value(0)).current;
-  const actionScale = useRef(new Animated.Value(1)).current;
-
-  const playActionAnim = (text: string, type: "delete" | "keep", onDone: () => void) => {
-    const preview = text.length > 30 ? text.slice(0, 30) + "…" : text;
-    setActionAnim({ text: preview, type });
-    actionX.setValue(0);
-    actionY.setValue(0);
-    actionOpacity.setValue(1);
-    actionScale.setValue(1);
-
-    if (type === "delete") {
-      // Shrink and fly to bottom-left (trashcan)
-      Animated.parallel([
-        Animated.timing(actionX, { toValue: -SCREEN_WIDTH * 0.35, duration: 450, useNativeDriver: true }),
-        Animated.timing(actionY, { toValue: 200, duration: 450, useNativeDriver: true }),
-        Animated.timing(actionScale, { toValue: 0.15, duration: 450, useNativeDriver: true }),
-        Animated.sequence([
-          Animated.delay(250),
-          Animated.timing(actionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        ]),
-      ]).start(() => setActionAnim(null));
-    } else {
-      // Fly right off screen (toward vault)
-      Animated.parallel([
-        Animated.timing(actionX, { toValue: SCREEN_WIDTH + 50, duration: 500, useNativeDriver: true }),
-        Animated.timing(actionY, { toValue: -20, duration: 500, useNativeDriver: true }),
-        Animated.timing(actionScale, { toValue: 0.4, duration: 500, useNativeDriver: true }),
-        Animated.sequence([
-          Animated.delay(300),
-          Animated.timing(actionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        ]),
-      ]).start(() => setActionAnim(null));
-    }
-
-    // Don't wait for anim to finish before advancing
-    setTimeout(onDone, 100);
-  };
-
-  const handleSwipeLeft = async (note: Note) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await updateNoteStatus(note.id, "archived");
-      showToast("🗑 Deleted");
-    } catch (err) {
-      console.error("Archive error:", err);
-    }
-    if (viewMode === "card") {
-      playActionAnim(note.content, "delete", advanceCard);
-    } else {
-      removeFromGrid(note.id);
-    }
-  };
-
-  const handleSwipeRight = async (note: Note) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await updateNoteStatus(note.id, "stored");
-      showToast("✅ Kept");
-    } catch (err) {
-      console.error("Store error:", err);
-    }
-    if (viewMode === "card") {
-      playActionAnim(note.content, "keep", advanceCard);
-    } else {
-      removeFromGrid(note.id);
-    }
-  };
-
-  const handleSwipeUp = async (note: Note) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setMergeNote(note);
-    setMergeLoading(true);
-    setMergeMatches([]);
-
-    try {
-      if (!note.embedding || !user) {
-        setMergeMatches([]);
-        return;
-      }
-      const matches = await findSimilarNotes(note.embedding, user.id);
-      setMergeMatches(matches);
-    } catch (err) {
-      console.error("Vector search error:", err);
-      setMergeMatches([]);
-    } finally {
-      setMergeLoading(false);
-    }
-  };
-
-  const handleMergeSelect = async (parentId: string) => {
-    if (!mergeNote) return;
-
-    try {
-      await mergeNotes(parentId, mergeNote);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast("🔗 Merged");
-    } catch (err) {
-      console.error("Merge error:", err);
-    }
-
-    const mergedId = mergeNote.id;
-    setMergeNote(null);
-    setMergeMatches([]);
-    viewMode === "card" ? advanceCard() : removeFromGrid(mergedId);
-  };
-
-  const handleMergeClose = () => {
-    const noteToStore = mergeNote;
-    setMergeNote(null);
-    setMergeMatches([]);
-    if (noteToStore && viewMode === "card") {
-      updateNoteStatus(noteToStore.id, "stored").catch(console.error);
-      advanceCard();
-    }
-  };
-
-  // ---------- Render ----------
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.accent} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (remainingNotes.length === 0) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.emptyEmoji}>🎉</Text>
-          <Text style={styles.emptyTitle}>All caught up!</Text>
-          <Text style={styles.emptySubtitle}>
-            No notes in your inbox. Capture some thoughts first.
-          </Text>
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={loadInboxNotes}
-          >
-            <Text style={styles.refreshText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const currentNote = remainingNotes[0];
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.replace("/user")}
-          >
-            <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
-            <Text style={styles.backText}>Home</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Review</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.counter}>
-            {viewMode === "card"
-              ? `${currentIndex + 1} / ${notes.length}`
-              : `${remainingNotes.length} notes`}
-          </Text>
-          <TouchableOpacity
-            onPress={() =>
-              setViewMode(viewMode === "card" ? "grid" : "card")
-            }
-            style={styles.viewToggle}
-          >
-            <Ionicons
-              name={viewMode === "card" ? "grid-outline" : "layers-outline"}
-              size={22}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {viewMode === "card" ? (
-        <>
-          <View style={styles.hints}>
-            <TouchableOpacity
-              style={styles.hintButton}
-              onPress={() => currentNote && handleSwipeLeft(currentNote)}
-              activeOpacity={0.6}
-            >
-              <Text style={[styles.hint, { color: colors.swipeDelete }]}>
-            ← Delete{"\n"}
-            <Text style={styles.shortcutHint}>[⌫]</Text>
-          </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.hintButton}
-              onPress={() => currentNote && handleSwipeUp(currentNote)}
-              activeOpacity={0.6}
-            >
-              <Text style={[styles.hint, { color: colors.swipeMerge }]}>
-            ↑ Merge{"\n"}
-            <Text style={styles.shortcutHint}>[space]</Text>
-          </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.hintButton}
-              onPress={() => currentNote && handleSwipeRight(currentNote)}
-              activeOpacity={0.6}
-            >
-              <Text style={[styles.hint, { color: colors.swipeKeep }]}>
-            Keep →{"\n"}
-            <Text style={styles.shortcutHint}>[enter]</Text>
-          </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.cardContainer}>
-            {remainingNotes
-              .slice(0, 3)
-              .reverse()
-              .map((note, reverseIdx) => {
-                const stackIndex =
-                  Math.min(remainingNotes.length - 1, 2) - reverseIdx;
-                return (
-                  <SwipeCard
-                    key={note.id}
-                    content={note.content}
-                    index={stackIndex}
-                    onSwipeLeft={() => handleSwipeLeft(note)}
-                    onSwipeRight={() => handleSwipeRight(note)}
-                    onSwipeUp={() => handleSwipeUp(note)}
-                  />
-                );
-              })}
-          </View>
-        </>
-      ) : (
-        <ScrollView
-          style={styles.gridScroll}
-          contentContainerStyle={styles.gridContent}
-        >
-          {remainingNotes.map((note) => (
-            <View key={note.id} style={styles.gridCard}>
-              <Text style={styles.gridCardText} numberOfLines={5}>
-                {note.content}
-              </Text>
-              <View style={styles.gridActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.gridActionBtn,
-                    { backgroundColor: colors.swipeDelete + "20" },
-                  ]}
-                  onPress={() => handleSwipeLeft(note)}
-                >
-                  <Text
-                    style={[
-                      styles.gridActionText,
-                      { color: colors.swipeDelete },
-                    ]}
-                  >
-                    ✕
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.gridActionBtn,
-                    { backgroundColor: colors.swipeMerge + "20" },
-                  ]}
-                  onPress={() => handleSwipeUp(note)}
-                >
-                  <Text
-                    style={[
-                      styles.gridActionText,
-                      { color: colors.swipeMerge },
-                    ]}
-                  >
-                    ↑
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.gridActionBtn,
-                    { backgroundColor: colors.swipeKeep + "20" },
-                  ]}
-                  onPress={() => handleSwipeRight(note)}
-                >
-                  <Text
-                    style={[
-                      styles.gridActionText,
-                      { color: colors.swipeKeep },
-                    ]}
-                  >
-                    ✓
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-      {/* Action animation (delete / keep) */}
-      {actionAnim && (
-        <Animated.View
-          style={[
-            styles.actionAnim,
-            {
-              opacity: actionOpacity,
-              transform: [
-                { translateX: actionX },
-                { translateY: actionY },
-                { scale: actionScale },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.actionAnimIcon}>
-            {actionAnim.type === "delete" ? "🗑" : "📦"}
-          </Text>
-          <Text style={styles.actionAnimText} numberOfLines={1}>
-            {actionAnim.text}
-          </Text>
-        </Animated.View>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
-          <Text style={styles.toastText}>{toast}</Text>
-        </Animated.View>
-      )}
-
-      <MergeSheet
-        visible={mergeNote !== null}
-        matches={mergeMatches}
-        loading={mergeLoading}
-        onSelect={handleMergeSelect}
-        onClose={handleMergeClose}
-      />
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  backText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    fontWeight: "600",
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: fontSize.hero,
-    fontWeight: "800",
-  },
-  counter: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    fontWeight: "600",
-  },
-  viewToggle: {
-    padding: spacing.sm,
-    borderRadius: radius.sm,
-    backgroundColor: colors.bgElevated,
-  },
-  hints: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  hint: {
-    fontSize: fontSize.sm,
-    fontWeight: "600",
-    opacity: 0.7,
-    textAlign: "center",
-  },
-  shortcutHint: {
-    fontSize: fontSize.xs,
-    opacity: 0.5,
-    fontWeight: "400",
-  },
-  hintButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  cardContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    width: "100%",
-  },
-  // Grid layout
-  gridScroll: {
-    flex: 1,
-  },
-  gridContent: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    padding: spacing.lg,
-    gap: GRID_GAP,
-  },
-  gridCard: {
-    width: "31%",
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    aspectRatio: 0.9,
-    justifyContent: "space-between",
-  },
-  gridCardText: {
-    color: colors.textPrimary,
-    fontSize: fontSize.sm,
-    lineHeight: 20,
-    flex: 1,
-  },
-  gridActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  gridActionBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.sm,
-  },
-  gridActionText: {
-    fontSize: fontSize.md,
-    fontWeight: "700",
-  },
-  // Action animation
-  actionAnim: {
-    position: "absolute",
-    top: "40%",
-    left: spacing.xl,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxWidth: 220,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  actionAnimIcon: {
-    fontSize: 20,
-  },
-  actionAnimText: {
-    color: colors.textPrimary,
-    fontSize: fontSize.sm,
-    flex: 1,
-  },
-  // Empty state
-  emptyEmoji: {
-    fontSize: 72,
-    marginBottom: spacing.lg,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontSize: fontSize.xxl,
-    fontWeight: "700",
-    marginBottom: spacing.sm,
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-  },
-  refreshButton: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: 100,
-  },
-  refreshText: {
-    color: colors.textPrimary,
-    fontSize: fontSize.md,
-    fontWeight: "700",
-  },
-  toast: {
-    position: "absolute",
-    bottom: 100,
-    alignSelf: "center",
-    backgroundColor: colors.bgElevated,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: 100,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  toastText: {
-    color: colors.textPrimary,
-    fontSize: fontSize.md,
-    fontWeight: "600",
-  },
-});
 </file>
 
 <file path="app/user/settings.tsx">
@@ -4356,6 +3237,735 @@ Background Action: LLM returns formatted text. UI updates instantly. Supabase co
 }
 </file>
 
+<file path="app/user/review.tsx">
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  Animated,
+  Platform,
+  ScrollView,
+  Dimensions,
+  useWindowDimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import SwipeCard from "../../components/SwipeCard";
+import MergeSheet from "../../components/MergeSheet";
+import { supabase } from "../../lib/supabase";
+import { updateNoteStatus, findSimilarNotes, mergeNotes } from "../../lib/notes";
+import { useAuth } from "../../lib/auth";
+import type { Note, MatchResult } from "../../lib/types";
+import { useThemeColors } from "../../lib/ThemeContext";
+import { fontSize, spacing, radius } from "../../lib/theme";
+import type { ThemeColors } from "../../lib/theme";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const GRID_COLS = 3;
+const GRID_GAP = spacing.sm;
+const GRID_CARD_WIDTH =
+  (SCREEN_WIDTH - spacing.lg * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+
+type ViewMode = "card" | "grid";
+
+export default function ReviewScreen() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("card");
+
+  // Merge state
+  const [mergeNote, setMergeNote] = useState<Note | null>(null);
+  const [mergeMatches, setMergeMatches] = useState<MatchResult[]>([]);
+  const [mergeLoading, setMergeLoading] = useState(false);
+
+  // Toast state
+  const [toast, setToast] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<NodeJS.Timeout>();
+
+  const showToast = (message: string) => {
+    setToast(message);
+    toastOpacity.setValue(0);
+    Animated.timing(toastOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setToast(null));
+    }, 1500);
+  };
+
+  const loadInboxNotes = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("status", "inbox")
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setNotes(data as Note[]);
+      setCurrentIndex(0);
+    }
+    setLoading(false);
+  }, [user]);
+
+  // Auto-refresh when tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadInboxNotes();
+    }, [loadInboxNotes])
+  );
+
+  // Track current note in a ref for wheel handler
+  const remainingNotes = notes.slice(currentIndex);
+  const currentNoteRef = useRef<Note | null>(null);
+  currentNoteRef.current = remainingNotes[0] || null;
+
+  // Mouse wheel gestures (web, card mode only)
+  const wheelProcessing = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web" || viewMode !== "card") return;
+    const handleWheel = (e: WheelEvent) => {
+      if (wheelProcessing.current || !currentNoteRef.current) return;
+      const THRESHOLD = 50;
+      const note = currentNoteRef.current;
+
+      if (e.deltaY < -THRESHOLD) {
+        e.preventDefault();
+        wheelProcessing.current = true;
+        handleSwipeUp(note);
+        setTimeout(() => {
+          wheelProcessing.current = false;
+        }, 800);
+      } else if (e.deltaX > THRESHOLD) {
+        e.preventDefault();
+        wheelProcessing.current = true;
+        handleSwipeRight(note);
+        setTimeout(() => {
+          wheelProcessing.current = false;
+        }, 800);
+      } else if (e.deltaX < -THRESHOLD) {
+        e.preventDefault();
+        wheelProcessing.current = true;
+        handleSwipeLeft(note);
+        setTimeout(() => {
+          wheelProcessing.current = false;
+        }, 800);
+      }
+    };
+    document.addEventListener("wheel", handleWheel, { passive: false });
+    return () => document.removeEventListener("wheel", handleWheel);
+  }, [notes, currentIndex, viewMode]);
+
+  // Keyboard shortcuts for card + grid mode (web)
+  const keyProcessing = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (keyProcessing.current) return;
+      // Don't trigger if typing in an input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      // In card mode, use current card; in grid mode, use first note
+      const note = viewMode === "card" ? currentNoteRef.current : notes[0];
+      if (!note) return;
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        keyProcessing.current = true;
+        handleSwipeRight(note);
+        setTimeout(() => { keyProcessing.current = false; }, 600);
+      } else if (e.key === " ") {
+        e.preventDefault();
+        keyProcessing.current = true;
+        handleSwipeUp(note);
+        setTimeout(() => { keyProcessing.current = false; }, 600);
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        keyProcessing.current = true;
+        handleSwipeLeft(note);
+        setTimeout(() => { keyProcessing.current = false; }, 600);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [notes, currentIndex, viewMode]);
+
+  const advanceCard = () => {
+    setTimeout(() => {
+      setCurrentIndex((prev) => prev + 1);
+    }, 350);
+  };
+
+  const removeFromGrid = (noteId: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+  };
+
+  // Action animation state
+  const [actionAnim, setActionAnim] = useState<{ text: string; type: "delete" | "keep" } | null>(null);
+  const actionX = useRef(new Animated.Value(0)).current;
+  const actionY = useRef(new Animated.Value(0)).current;
+  const actionOpacity = useRef(new Animated.Value(0)).current;
+  const actionScale = useRef(new Animated.Value(1)).current;
+
+  const playActionAnim = (text: string, type: "delete" | "keep", onDone: () => void) => {
+    const preview = text.length > 30 ? text.slice(0, 30) + "…" : text;
+    setActionAnim({ text: preview, type });
+    actionX.setValue(0);
+    actionY.setValue(0);
+    actionOpacity.setValue(1);
+    actionScale.setValue(1);
+
+    if (type === "delete") {
+      // Shrink and fly to bottom-left (trashcan)
+      Animated.parallel([
+        Animated.timing(actionX, { toValue: -SCREEN_WIDTH * 0.35, duration: 450, useNativeDriver: true }),
+        Animated.timing(actionY, { toValue: 200, duration: 450, useNativeDriver: true }),
+        Animated.timing(actionScale, { toValue: 0.15, duration: 450, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(250),
+          Animated.timing(actionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        ]),
+      ]).start(() => setActionAnim(null));
+    } else {
+      // Fly right off screen (toward vault)
+      Animated.parallel([
+        Animated.timing(actionX, { toValue: SCREEN_WIDTH + 50, duration: 500, useNativeDriver: true }),
+        Animated.timing(actionY, { toValue: -20, duration: 500, useNativeDriver: true }),
+        Animated.timing(actionScale, { toValue: 0.4, duration: 500, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(300),
+          Animated.timing(actionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        ]),
+      ]).start(() => setActionAnim(null));
+    }
+
+    // Don't wait for anim to finish before advancing
+    setTimeout(onDone, 100);
+  };
+
+  const handleSwipeLeft = async (note: Note) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await updateNoteStatus(note.id, "archived");
+      showToast("🗑 Deleted");
+    } catch (err) {
+      console.error("Archive error:", err);
+    }
+    if (viewMode === "card") {
+      playActionAnim(note.content, "delete", advanceCard);
+    } else {
+      removeFromGrid(note.id);
+    }
+  };
+
+  const handleSwipeRight = async (note: Note) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await updateNoteStatus(note.id, "stored");
+      showToast("✅ Kept");
+    } catch (err) {
+      console.error("Store error:", err);
+    }
+    if (viewMode === "card") {
+      playActionAnim(note.content, "keep", advanceCard);
+    } else {
+      removeFromGrid(note.id);
+    }
+  };
+
+  const handleSwipeUp = async (note: Note) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setMergeNote(note);
+    setMergeLoading(true);
+    setMergeMatches([]);
+
+    try {
+      if (!note.embedding || !user) {
+        setMergeMatches([]);
+        return;
+      }
+      const matches = await findSimilarNotes(note.embedding, user.id);
+      setMergeMatches(matches);
+    } catch (err) {
+      console.error("Vector search error:", err);
+      setMergeMatches([]);
+    } finally {
+      setMergeLoading(false);
+    }
+  };
+
+  const handleMergeSelect = async (parentId: string) => {
+    if (!mergeNote) return;
+
+    try {
+      await mergeNotes(parentId, mergeNote);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast("🔗 Merged");
+    } catch (err) {
+      console.error("Merge error:", err);
+    }
+
+    const mergedId = mergeNote.id;
+    setMergeNote(null);
+    setMergeMatches([]);
+    viewMode === "card" ? advanceCard() : removeFromGrid(mergedId);
+  };
+
+  const handleMergeClose = () => {
+    const noteToStore = mergeNote;
+    setMergeNote(null);
+    setMergeMatches([]);
+    if (noteToStore && viewMode === "card") {
+      updateNoteStatus(noteToStore.id, "stored").catch(console.error);
+      advanceCard();
+    }
+  };
+
+  // ---------- Render ----------
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (remainingNotes.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text style={styles.emptyEmoji}>🎉</Text>
+          <Text style={styles.emptyTitle}>All caught up!</Text>
+          <Text style={styles.emptySubtitle}>
+            No notes in your inbox. Capture some thoughts first.
+          </Text>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={loadInboxNotes}
+          >
+            <Text style={styles.refreshText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const currentNote = remainingNotes[0];
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <View>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace("/user")}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
+            <Text style={styles.backText}>Home</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Review</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Text style={styles.counter}>
+            {viewMode === "card"
+              ? `${currentIndex + 1} / ${notes.length}`
+              : `${remainingNotes.length} notes`}
+          </Text>
+          <TouchableOpacity
+            onPress={() =>
+              setViewMode(viewMode === "card" ? "grid" : "card")
+            }
+            style={styles.viewToggle}
+          >
+            <Ionicons
+              name={viewMode === "card" ? "grid-outline" : "layers-outline"}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {viewMode === "card" ? (
+        <>
+          <View style={styles.hints}>
+            <TouchableOpacity
+              style={styles.hintButton}
+              onPress={() => currentNote && handleSwipeLeft(currentNote)}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.hint, { color: colors.swipeDelete }]}>
+            ← Delete{"\n"}
+            <Text style={styles.shortcutHint}>[⌫]</Text>
+          </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.hintButton}
+              onPress={() => currentNote && handleSwipeUp(currentNote)}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.hint, { color: colors.swipeMerge }]}>
+            ↑ Merge{"\n"}
+            <Text style={styles.shortcutHint}>[space]</Text>
+          </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.hintButton}
+              onPress={() => currentNote && handleSwipeRight(currentNote)}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.hint, { color: colors.swipeKeep }]}>
+            Keep →{"\n"}
+            <Text style={styles.shortcutHint}>[enter]</Text>
+          </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.cardContainer}>
+            {remainingNotes
+              .slice(0, 3)
+              .reverse()
+              .map((note, reverseIdx) => {
+                const stackIndex =
+                  Math.min(remainingNotes.length - 1, 2) - reverseIdx;
+                return (
+                  <SwipeCard
+                    key={note.id}
+                    content={note.content}
+                    index={stackIndex}
+                    onSwipeLeft={() => handleSwipeLeft(note)}
+                    onSwipeRight={() => handleSwipeRight(note)}
+                    onSwipeUp={() => handleSwipeUp(note)}
+                  />
+                );
+              })}
+          </View>
+        </>
+      ) : (
+        <ScrollView
+          style={styles.gridScroll}
+          contentContainerStyle={styles.gridContent}
+        >
+          {remainingNotes.map((note) => (
+            <View key={note.id} style={styles.gridCard}>
+              <Text style={styles.gridCardText} numberOfLines={5}>
+                {note.content}
+              </Text>
+              <View style={styles.gridActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.gridActionBtn,
+                    { backgroundColor: colors.swipeDelete + "20" },
+                  ]}
+                  onPress={() => handleSwipeLeft(note)}
+                >
+                  <Text
+                    style={[
+                      styles.gridActionText,
+                      { color: colors.swipeDelete },
+                    ]}
+                  >
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridActionBtn,
+                    { backgroundColor: colors.swipeMerge + "20" },
+                  ]}
+                  onPress={() => handleSwipeUp(note)}
+                >
+                  <Text
+                    style={[
+                      styles.gridActionText,
+                      { color: colors.swipeMerge },
+                    ]}
+                  >
+                    ↑
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridActionBtn,
+                    { backgroundColor: colors.swipeKeep + "20" },
+                  ]}
+                  onPress={() => handleSwipeRight(note)}
+                >
+                  <Text
+                    style={[
+                      styles.gridActionText,
+                      { color: colors.swipeKeep },
+                    ]}
+                  >
+                    ✓
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+      {/* Action animation (delete / keep) */}
+      {actionAnim && (
+        <Animated.View
+          style={[
+            styles.actionAnim,
+            {
+              opacity: actionOpacity,
+              transform: [
+                { translateX: actionX },
+                { translateY: actionY },
+                { scale: actionScale },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.actionAnimIcon}>
+            {actionAnim.type === "delete" ? "🗑" : "📦"}
+          </Text>
+          <Text style={styles.actionAnimText} numberOfLines={1}>
+            {actionAnim.text}
+          </Text>
+        </Animated.View>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </Animated.View>
+      )}
+
+      <MergeSheet
+        visible={mergeNote !== null}
+        matches={mergeMatches}
+        loading={mergeLoading}
+        onSelect={handleMergeSelect}
+        onClose={handleMergeClose}
+      />
+    </SafeAreaView>
+  );
+}
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  backText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: fontSize.hero,
+    fontWeight: "800",
+  },
+  counter: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: "600",
+  },
+  viewToggle: {
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bgElevated,
+  },
+  hints: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  hint: {
+    fontSize: fontSize.sm,
+    fontWeight: "600",
+    opacity: 0.7,
+    textAlign: "center",
+  },
+  shortcutHint: {
+    fontSize: fontSize.xs,
+    opacity: 0.5,
+    fontWeight: "400",
+  },
+  hintButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  cardContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    width: "100%",
+  },
+  // Grid layout
+  gridScroll: {
+    flex: 1,
+  },
+  gridContent: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    padding: spacing.lg,
+    gap: GRID_GAP,
+  },
+  gridCard: {
+    width: "31%",
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    aspectRatio: 0.9,
+    justifyContent: "space-between",
+  },
+  gridCardText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+    flex: 1,
+  },
+  gridActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  gridActionBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.sm,
+  },
+  gridActionText: {
+    fontSize: fontSize.md,
+    fontWeight: "700",
+  },
+  // Action animation
+  actionAnim: {
+    position: "absolute",
+    top: "40%",
+    left: spacing.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: 220,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  actionAnimIcon: {
+    fontSize: 20,
+  },
+  actionAnimText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.sm,
+    flex: 1,
+  },
+  // Empty state
+  emptyEmoji: {
+    fontSize: 72,
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: fontSize.xxl,
+    fontWeight: "700",
+    marginBottom: spacing.sm,
+  },
+  emptySubtitle: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+  },
+  refreshButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: 100,
+  },
+  refreshText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: "700",
+  },
+  toast: {
+    position: "absolute",
+    bottom: 100,
+    alignSelf: "center",
+    backgroundColor: colors.bgElevated,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toastText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: "600",
+  },
+});
+</file>
+
 <file path="components/SwipeCard.tsx">
 import React from "react";
 import { Dimensions, StyleSheet, Text, View } from "react-native";
@@ -4661,45 +4271,6 @@ export const radius = {
 };
 </file>
 
-<file path="app.json">
-{
-  "expo": {
-    "name": "Clipped",
-    "slug": "clipped-1",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
-    "scheme": "triagenotes",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0A0F"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.musicalbasics.triagenotes"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#0A0A0F",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "package": "com.musicalbasics.triagenotes"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro"
-    },
-    "plugins": [
-      "expo-router"
-    ]
-  }
-}
-</file>
-
 <file path="vercel.json">
 {
   "buildCommand": "npx expo export --platform web",
@@ -4961,56 +4532,6 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="lib/ai.ts">
-import { supabase } from "./supabase";
-
-export interface CleanupResult {
-  content: string;
-  tokensIn: number;
-  tokensOut: number;
-  cost: number;
-}
-
-/**
- * Generate a 1536-dimensional embedding vector for the given text.
- * Securely calls our Supabase Edge Function instead of OpenAI directly.
- */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const { data, error } = await supabase.functions.invoke("ai-tools", {
-    body: { action: "embed", text },
-  });
-
-  if (error) {
-    console.error("Edge function error:", error);
-    throw new Error("Failed to generate embedding");
-  }
-
-  return data.embedding;
-}
-
-/**
- * Use an LLM to clean up and organize messy note content.
- * Securely calls our Supabase Edge Function instead of OpenAI directly.
- */
-export async function cleanupNote(content: string): Promise<CleanupResult> {
-  const { data, error } = await supabase.functions.invoke("ai-tools", {
-    body: { action: "cleanup", text: content },
-  });
-
-  if (error) {
-    console.error("Edge function error:", error);
-    throw new Error("Failed to clean up note");
-  }
-
-  return {
-    content: data.content,
-    tokensIn: data.tokensIn,
-    tokensOut: data.tokensOut,
-    cost: data.cost,
-  };
-}
-</file>
-
 <file path="lib/supabase.ts">
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
@@ -5030,6 +4551,144 @@ export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
     detectSessionInUrl: false,
   },
 });
+</file>
+
+<file path="app.json">
+{
+  "expo": {
+    "name": "Clipped",
+    "slug": "clipped-1",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "triagenotes",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.musicalbasics.triagenotes"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.musicalbasics.triagenotes"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
+</file>
+
+<file path="lib/ai.ts">
+// AI helper functions for embedding generation and note cleanup
+
+const EMBEDDING_MODEL = "text-embedding-3-small";
+const CLEANUP_MODEL = "gpt-4o-mini";
+
+const CLEANUP_SYSTEM_PROMPT = `You are a note-formatting assistant. The user will give you raw, 
+unstructured notes that may contain fragments, run-on sentences, and merged thoughts. 
+Your job is to:
+1. Organize the content into logical sections.
+2. Use clear bullet points and sub-bullets.
+3. Fix grammar and spelling without changing meaning.
+4. Preserve ALL information — do not remove or summarize away any content.
+Return only the formatted note content, no preamble.`;
+
+/**
+ * Generate a 1536-dimensional embedding vector for the given text.
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("EXPO_PUBLIC_OPENAI_API_KEY is not set");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: EMBEDDING_MODEL,
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Embedding API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+export interface CleanupResult {
+  content: string;
+  tokensIn: number;
+  tokensOut: number;
+  cost: number; // USD
+}
+
+// gpt-4o-mini pricing per 1M tokens
+const CLEANUP_INPUT_COST = 0.15; // $0.15 per 1M input tokens
+const CLEANUP_OUTPUT_COST = 0.60; // $0.60 per 1M output tokens
+
+/**
+ * Use an LLM to clean up and organize messy note content.
+ * Returns cleaned content + token usage stats.
+ */
+export async function cleanupNote(content: string): Promise<CleanupResult> {
+  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("EXPO_PUBLIC_OPENAI_API_KEY is not set");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: CLEANUP_MODEL,
+      messages: [
+        { role: "system", content: CLEANUP_SYSTEM_PROMPT },
+        { role: "user", content },
+      ],
+      temperature: 0.3,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cleanup API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const tokensIn = data.usage?.prompt_tokens ?? 0;
+  const tokensOut = data.usage?.completion_tokens ?? 0;
+  const cost = (tokensIn * CLEANUP_INPUT_COST + tokensOut * CLEANUP_OUTPUT_COST) / 1_000_000;
+
+  return {
+    content: data.choices[0].message.content,
+    tokensIn,
+    tokensOut,
+    cost,
+  };
+}
 </file>
 
 <file path="repomix.config.json">
@@ -5073,347 +4732,6 @@ export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
     ]
   }
 }
-</file>
-
-<file path="app/note/[id].tsx">
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  ScrollView,
-  Alert,
-  Animated,
-  Dimensions,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { supabase } from "../../lib/supabase";
-import { updateNoteContent, updateNoteStatus } from "../../lib/notes";
-import { cleanupNote } from "../../lib/ai";
-import { generateAndStoreEmbedding } from "../../lib/notes";
-import { colors, fontSize, spacing, radius } from "../../lib/theme";
-import type { Note } from "../../lib/types";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-function debounce<T extends (...args: any[]) => any>(
-  fn: T,
-  delay: number
-) {
-  let timer: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
-
-export default function NoteDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-  const [note, setNote] = useState<Note | null>(null);
-  const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [cleaning, setCleaning] = useState(false);
-  const [originalContent, setOriginalContent] = useState<string | null>(null);
-  const [showUndo, setShowUndo] = useState(false);
-  const [cleanupCost, setCleanupCost] = useState<{ tokensIn: number; tokensOut: number; cost: number } | null>(null);
-  const undoTimer = useRef<NodeJS.Timeout>();
-
-  // Delete animation
-  const [deleting, setDeleting] = useState(false);
-  const deleteScale = useRef(new Animated.Value(1)).current;
-  const deleteX = useRef(new Animated.Value(0)).current;
-  const deleteOpacity = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (id) loadNote();
-  }, [id]);
-
-  const loadNote = async () => {
-    if (!id) return;
-    const { data, error } = await supabase
-      .from("notes")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (!error && data) {
-      setNote(data as Note);
-      setContent(data.content);
-    }
-    setLoading(false);
-  };
-
-  const debouncedSave = useMemo(
-    () =>
-      debounce(async (newContent: string) => {
-        if (!id) return;
-        await updateNoteContent(id, newContent);
-      }, 1500),
-    [id]
-  );
-
-  const handleContentChange = (text: string) => {
-    setContent(text);
-    debouncedSave(text);
-  };
-
-  const handleCleanup = async () => {
-    if (!id || !content.trim()) return;
-
-    setCleaning(true);
-    try {
-      const result = await cleanupNote(content);
-      setOriginalContent(content);
-      setContent(result.content);
-      setCleanupCost({ tokensIn: result.tokensIn, tokensOut: result.tokensOut, cost: result.cost });
-      await updateNoteContent(id, result.content);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      setShowUndo(true);
-      undoTimer.current = setTimeout(() => {
-        setShowUndo(false);
-        setOriginalContent(null);
-        setCleanupCost(null);
-      }, 10000);
-    } catch (err) {
-      Alert.alert("Cleanup Failed", "Please try again.");
-      console.error("Cleanup error:", err);
-    } finally {
-      setCleaning(false);
-    }
-  };
-
-  const handleUndo = async () => {
-    if (!id || !originalContent) return;
-    clearTimeout(undoTimer.current);
-    setContent(originalContent);
-    await updateNoteContent(id, originalContent);
-    setOriginalContent(null);
-    setShowUndo(false);
-    setCleanupCost(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleDelete = async () => {
-    if (!id) return;
-    setDeleting(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    await updateNoteStatus(id, "archived");
-
-    Animated.parallel([
-      Animated.timing(deleteScale, { toValue: 0.1, duration: 400, useNativeDriver: true }),
-      Animated.timing(deleteX, { toValue: -SCREEN_WIDTH * 0.4, duration: 400, useNativeDriver: true }),
-      Animated.sequence([
-        Animated.delay(200),
-        Animated.timing(deleteOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]),
-    ]).start(() => {
-      router.back();
-    });
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.accent} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!note) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>Note not found</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity: deleteOpacity,
-          transform: [
-            { scale: deleteScale },
-            { translateX: deleteX },
-          ],
-        },
-      ]}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        <View style={styles.metaBar}>
-          <Text style={styles.metaText}>
-            Last updated: {new Date(note.updated_at).toLocaleDateString()}
-          </Text>
-          <Text style={styles.metaText}>{content.length} chars</Text>
-        </View>
-
-        <ScrollView style={styles.scrollContainer} keyboardDismissMode="on-drag">
-          <TextInput
-            style={styles.contentInput}
-            value={content}
-            onChangeText={handleContentChange}
-            multiline
-            scrollEnabled={false}
-            textAlignVertical="top"
-            placeholder="Write something..."
-            placeholderTextColor={colors.textMuted}
-          />
-        </ScrollView>
-
-        <View style={styles.bottomBar}>
-          <View style={styles.bottomLeft}>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={handleDelete}
-              disabled={deleting}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.deleteText}>🗑</Text>
-            </TouchableOpacity>
-            {showUndo && (
-              <TouchableOpacity style={styles.undoButton} onPress={handleUndo}>
-                <Text style={styles.undoText}>↩ Undo</Text>
-              </TouchableOpacity>
-            )}
-            {cleanupCost && (
-              <Text style={styles.costText}>
-                {cleanupCost.tokensIn}↓ {cleanupCost.tokensOut}↑ · ${cleanupCost.cost.toFixed(4)}
-              </Text>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.cleanupButton, cleaning && styles.cleanupDisabled]}
-            onPress={handleCleanup}
-            disabled={cleaning}
-            activeOpacity={0.8}
-          >
-            {cleaning ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Text style={styles.cleanupText}>✨ Clean Up</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </Animated.View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-  },
-  metaBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  metaText: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  contentInput: {
-    color: colors.textPrimary,
-    fontSize: fontSize.lg,
-    lineHeight: 28,
-    padding: spacing.lg,
-    minHeight: 300,
-  },
-  bottomBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing.md,
-    paddingBottom: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  bottomLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    flex: 1,
-  },
-  deleteButton: {
-    backgroundColor: colors.error + "20",
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.error + "30",
-  },
-  deleteText: {
-    fontSize: 18,
-  },
-  undoButton: {
-    backgroundColor: colors.warning + "20",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-  },
-  undoText: {
-    color: colors.warning,
-    fontSize: fontSize.sm,
-    fontWeight: "600",
-  },
-  cleanupButton: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.full,
-    minWidth: 120,
-    alignItems: "center",
-  },
-  cleanupDisabled: {
-    opacity: 0.6,
-  },
-  cleanupText: {
-    color: colors.textPrimary,
-    fontSize: fontSize.md,
-    fontWeight: "700",
-  },
-  costText: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-  },
-});
 </file>
 
 <file path="app/_layout.tsx">
@@ -5747,6 +5065,776 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+</file>
+
+<file path="app/note/[id].tsx">
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  ScrollView,
+  Alert,
+  Animated,
+  Dimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { supabase } from "../../lib/supabase";
+import { updateNoteContent, updateNoteStatus } from "../../lib/notes";
+import { cleanupNote } from "../../lib/ai";
+import { generateAndStoreEmbedding } from "../../lib/notes";
+import { useThemeColors } from "../../lib/ThemeContext";
+import { fontSize, spacing, radius } from "../../lib/theme";
+import type { ThemeColors } from "../../lib/theme";
+import type { Note } from "../../lib/types";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  delay: number
+) {
+  let timer: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+export default function NoteDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [note, setNote] = useState<Note | null>(null);
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [cleaning, setCleaning] = useState(false);
+  const [originalContent, setOriginalContent] = useState<string | null>(null);
+  const [showUndo, setShowUndo] = useState(false);
+  const [cleanupCost, setCleanupCost] = useState<{ tokensIn: number; tokensOut: number; cost: number } | null>(null);
+  const undoTimer = useRef<NodeJS.Timeout>();
+
+  // Delete animation
+  const [deleting, setDeleting] = useState(false);
+  const deleteScale = useRef(new Animated.Value(1)).current;
+  const deleteX = useRef(new Animated.Value(0)).current;
+  const deleteOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (id) loadNote();
+  }, [id]);
+
+  const loadNote = async () => {
+    if (!id) return;
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (!error && data) {
+      setNote(data as Note);
+      setContent(data.content);
+    }
+    setLoading(false);
+  };
+
+  const debouncedSave = useMemo(
+    () =>
+      debounce(async (newContent: string) => {
+        if (!id) return;
+        await updateNoteContent(id, newContent);
+      }, 1500),
+    [id]
+  );
+
+  const handleContentChange = (text: string) => {
+    setContent(text);
+    debouncedSave(text);
+  };
+
+  const handleCleanup = async () => {
+    if (!id || !content.trim()) return;
+
+    setCleaning(true);
+    try {
+      const result = await cleanupNote(content);
+      setOriginalContent(content);
+      setContent(result.content);
+      setCleanupCost({ tokensIn: result.tokensIn, tokensOut: result.tokensOut, cost: result.cost });
+      await updateNoteContent(id, result.content);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      setShowUndo(true);
+      undoTimer.current = setTimeout(() => {
+        setShowUndo(false);
+        setOriginalContent(null);
+        setCleanupCost(null);
+      }, 10000);
+    } catch (err) {
+      Alert.alert("Cleanup Failed", "Please try again.");
+      console.error("Cleanup error:", err);
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!id || !originalContent) return;
+    clearTimeout(undoTimer.current);
+    setContent(originalContent);
+    await updateNoteContent(id, originalContent);
+    setOriginalContent(null);
+    setShowUndo(false);
+    setCleanupCost(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    setDeleting(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await updateNoteStatus(id, "archived");
+
+    Animated.parallel([
+      Animated.timing(deleteScale, { toValue: 0.1, duration: 400, useNativeDriver: true }),
+      Animated.timing(deleteX, { toValue: -SCREEN_WIDTH * 0.4, duration: 400, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.delay(200),
+        Animated.timing(deleteOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]),
+    ]).start(() => {
+      router.back();
+    });
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!note) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>Note not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: deleteOpacity,
+          transform: [
+            { scale: deleteScale },
+            { translateX: deleteX },
+          ],
+        },
+      ]}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
+        <View style={styles.metaBar}>
+          <Text style={styles.metaText}>
+            Last updated: {new Date(note.updated_at).toLocaleDateString()}
+          </Text>
+          <Text style={styles.metaText}>{content.length} chars</Text>
+        </View>
+
+        <ScrollView style={styles.scrollContainer} keyboardDismissMode="on-drag">
+          <TextInput
+            style={styles.contentInput}
+            value={content}
+            onChangeText={handleContentChange}
+            multiline
+            scrollEnabled={false}
+            textAlignVertical="top"
+            placeholder="Write something..."
+            placeholderTextColor={colors.textMuted}
+          />
+        </ScrollView>
+
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomLeft}>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDelete}
+              disabled={deleting}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.deleteText}>🗑</Text>
+            </TouchableOpacity>
+            {showUndo && (
+              <TouchableOpacity style={styles.undoButton} onPress={handleUndo}>
+                <Text style={styles.undoText}>↩ Undo</Text>
+              </TouchableOpacity>
+            )}
+            {cleanupCost && (
+              <Text style={styles.costText}>
+                {cleanupCost.tokensIn}↓ {cleanupCost.tokensOut}↑ · ${cleanupCost.cost.toFixed(4)}
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.cleanupButton, cleaning && styles.cleanupDisabled]}
+            onPress={handleCleanup}
+            disabled={cleaning}
+            activeOpacity={0.8}
+          >
+            {cleaning ? (
+              <ActivityIndicator size="small" color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.cleanupText}>✨ Clean Up</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Animated.View>
+  );
+}
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+  },
+  metaBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  metaText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  contentInput: {
+    color: colors.textPrimary,
+    fontSize: fontSize.lg,
+    lineHeight: 28,
+    padding: spacing.lg,
+    minHeight: 300,
+  },
+  bottomBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  bottomLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flex: 1,
+  },
+  deleteButton: {
+    backgroundColor: colors.error + "20",
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.error + "30",
+  },
+  deleteText: {
+    fontSize: 18,
+  },
+  undoButton: {
+    backgroundColor: colors.warning + "20",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+  },
+  undoText: {
+    color: colors.warning,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
+  },
+  cleanupButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    minWidth: 120,
+    alignItems: "center",
+  },
+  cleanupDisabled: {
+    opacity: 0.6,
+  },
+  cleanupText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: "700",
+  },
+  costText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+  },
+});
+</file>
+
+<file path="app/user/capture.tsx">
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  Dimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { createNote } from "../../lib/notes";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../lib/auth";
+import { useThemeColors } from "../../lib/ThemeContext";
+import { fontSize, spacing, radius } from "../../lib/theme";
+import type { ThemeColors } from "../../lib/theme";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+export default function CaptureScreen() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const checkmarkOpacity = useRef(new Animated.Value(0)).current;
+  const contentRef = useRef(content);
+  contentRef.current = content;
+
+  // Recent notes
+  const [recentNotes, setRecentNotes] = useState<{ id: string; content: string }[]>([]);
+
+  const loadRecentNotes = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("notes")
+      .select("id, content")
+      .eq("user_id", user.id)
+      .in("status", ["inbox", "stored"])
+      .order("created_at", { ascending: false })
+      .limit(3);
+    if (data) setRecentNotes(data);
+  }, [user]);
+
+  useEffect(() => {
+    loadRecentNotes();
+  }, [loadRecentNotes]);
+
+  // Flying note animation state
+  const [flyingText, setFlyingText] = useState<string | null>(null);
+  const flyX = useRef(new Animated.Value(0)).current;
+  const flyY = useRef(new Animated.Value(0)).current;
+  const flyOpacity = useRef(new Animated.Value(1)).current;
+  const flyScale = useRef(new Animated.Value(1)).current;
+
+  const showFlyingNote = (text: string) => {
+    setFlyingText(text.length > 40 ? text.slice(0, 40) + "…" : text);
+    flyX.setValue(0);
+    flyY.setValue(0);
+    flyOpacity.setValue(1);
+    flyScale.setValue(1);
+
+    Animated.parallel([
+      Animated.timing(flyX, {
+        toValue: SCREEN_WIDTH + 50,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flyY, {
+        toValue: -30,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flyScale, {
+        toValue: 0.3,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.timing(flyOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => setFlyingText(null));
+  };
+
+  const showSuccess = () => {
+    Animated.sequence([
+      Animated.timing(checkmarkOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.delay(800),
+      Animated.timing(checkmarkOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleSave = async () => {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    if (!user) return;
+
+    setSaving(true);
+    try {
+      await createNote(user.id, trimmed);
+      showFlyingNote(trimmed);
+      setContent("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSuccess();
+      inputRef.current?.focus();
+      loadRecentNotes();
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      console.error("Save error:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Cmd+Enter / Ctrl+Enter to save (web)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        const trimmed = contentRef.current.trim();
+        if (!trimmed || !user) return;
+        setSaving(true);
+        try {
+          await createNote(user.id, trimmed);
+          showFlyingNote(trimmed);
+          setContent("");
+          contentRef.current = "";
+          showSuccess();
+          inputRef.current?.focus();
+        } catch (err) {
+          console.error("Save error:", err);
+        } finally {
+          setSaving(false);
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [user]);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace("/user")}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={20}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.backText}>Home</Text>
+          </TouchableOpacity>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.title}>Capture</Text>
+              <Text style={styles.subtitle}>What's on your mind?</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                (!content.trim() || saving) && styles.saveButtonDisabled,
+              ]}
+              onPress={handleSave}
+              disabled={!content.trim() || saving}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? "Saving..." : "Save"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            ref={inputRef}
+            style={styles.textInput}
+            placeholder="Type your thought..."
+            placeholderTextColor={colors.textMuted}
+            value={content}
+            onChangeText={setContent}
+            multiline
+            autoFocus
+            textAlignVertical="top"
+            scrollEnabled
+          />
+          {content.length > 0 && (
+            <Text style={styles.charCount}>{content.length}</Text>
+          )}
+        </View>
+
+        <Animated.View
+          style={[styles.successBadge, { opacity: checkmarkOpacity }]}
+        >
+          <Text style={styles.successText}>✓ Saved to Inbox</Text>
+        </Animated.View>
+
+        {recentNotes.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.recentLabel}>Recent</Text>
+            <View style={styles.recentRow}>
+              {recentNotes.map((n) => (
+                <View key={n.id} style={styles.recentNoteCard}>
+                  <Text style={styles.recentNote} numberOfLines={2}>
+                    {n.content.slice(0, 30)}{n.content.length > 30 ? "…" : ""}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </KeyboardAvoidingView>
+
+      {/* Flying note animation */}
+      {flyingText && (
+        <Animated.View
+          style={[
+            styles.flyingNote,
+            {
+              opacity: flyOpacity,
+              transform: [
+                { translateX: flyX },
+                { translateY: flyY },
+                { scale: flyScale },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.flyingNoteText} numberOfLines={1}>
+            {flyingText}
+          </Text>
+        </Animated.View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    keyboardView: {
+      flex: 1,
+      padding: spacing.lg,
+    },
+    header: {
+      marginBottom: spacing.lg,
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    backButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    backText: {
+      color: colors.textSecondary,
+      fontSize: fontSize.sm,
+      fontWeight: "600",
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: fontSize.hero,
+      fontWeight: "800",
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: fontSize.md,
+      marginTop: spacing.xs,
+    },
+    inputContainer: {
+      flex: 1,
+      position: "relative",
+    },
+    textInput: {
+      flex: 1,
+      minHeight: 200,
+      color: colors.textPrimary,
+      fontSize: fontSize.lg,
+      lineHeight: 28,
+      backgroundColor: colors.bgCard,
+      borderRadius: radius.lg,
+      padding: spacing.lg,
+      paddingTop: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      textAlignVertical: "top",
+    },
+    charCount: {
+      position: "absolute",
+      bottom: spacing.sm,
+      right: spacing.md,
+      color: colors.textMuted,
+      fontSize: fontSize.xs,
+    },
+    bottomBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingTop: spacing.md,
+    },
+    successBadge: {
+      backgroundColor: colors.success + "20",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.full,
+    },
+    successText: {
+      color: colors.success,
+      fontSize: fontSize.sm,
+      fontWeight: "600",
+    },
+    saveButton: {
+      backgroundColor: colors.accent,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderRadius: radius.full,
+      minWidth: 100,
+      alignItems: "center",
+    },
+    saveButtonDisabled: {
+      opacity: 0.4,
+    },
+    saveButtonText: {
+      color: colors.textPrimary,
+      fontSize: fontSize.md,
+      fontWeight: "700",
+    },
+    flyingNote: {
+      position: "absolute",
+      top: "45%",
+      left: spacing.lg,
+      backgroundColor: colors.bgCard,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.accent + "60",
+      maxWidth: 200,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    },
+    flyingNoteText: {
+      color: colors.textPrimary,
+      fontSize: fontSize.sm,
+    },
+    recentSection: {
+      marginTop: spacing.md,
+      paddingTop: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    recentLabel: {
+      color: colors.textMuted,
+      fontSize: fontSize.xs,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: spacing.sm,
+    },
+    recentRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    recentNote: {
+      color: colors.textSecondary,
+      fontSize: fontSize.sm,
+    },
+    recentNoteCard: {
+      flex: 1,
+      backgroundColor: colors.bgElevated ?? colors.bgCard,
+      borderRadius: radius.lg,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
+      borderWidth: 1.5,
+      borderColor: colors.accent + "30",
+    },
+  });
 </file>
 
 <file path="package.json">

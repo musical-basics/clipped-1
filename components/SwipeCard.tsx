@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Dimensions, StyleSheet, Text, View } from "react-native";
 import {
   Gesture,
@@ -12,7 +12,9 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { colors, fontSize, spacing, radius } from "../lib/theme";
+import { useThemeColors } from "../lib/ThemeContext";
+import { fontSize, spacing, radius } from "../lib/theme";
+import type { ThemeColors } from "../lib/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD_X = 120;
@@ -33,6 +35,8 @@ export default function SwipeCard({
   onSwipeUp,
   index,
 }: SwipeCardProps) {
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const cardScale = useSharedValue(1);
@@ -154,7 +158,8 @@ export default function SwipeCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   card: {
     position: "absolute",
     width: "90%",

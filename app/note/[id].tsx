@@ -273,6 +273,7 @@ const createStyles = (colors: ThemeColors) =>
   },
   scrollContainer: {
     flex: 1,
+    backgroundColor: colors.bgCard,
   },
   contentInput: {
     color: colors.textPrimary,
