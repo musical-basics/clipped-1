@@ -184,8 +184,25 @@ export default function CaptureScreen() {
             />
             <Text style={styles.backText}>Home</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Capture</Text>
-          <Text style={styles.subtitle}>What's on your mind?</Text>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.title}>Capture</Text>
+              <Text style={styles.subtitle}>What's on your mind?</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                (!content.trim() || saving) && styles.saveButtonDisabled,
+              ]}
+              onPress={handleSave}
+              disabled={!content.trim() || saving}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? "Saving..." : "Save"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.inputContainer}>
@@ -206,27 +223,11 @@ export default function CaptureScreen() {
           )}
         </View>
 
-        <View style={styles.bottomBar}>
-          <Animated.View
-            style={[styles.successBadge, { opacity: checkmarkOpacity }]}
-          >
-            <Text style={styles.successText}>✓ Saved to Inbox</Text>
-          </Animated.View>
-
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              (!content.trim() || saving) && styles.saveButtonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={!content.trim() || saving}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? "Saving..." : "Save"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <Animated.View
+          style={[styles.successBadge, { opacity: checkmarkOpacity }]}
+        >
+          <Text style={styles.successText}>✓ Saved to Inbox</Text>
+        </Animated.View>
 
         {recentNotes.length > 0 && (
           <View style={styles.recentSection}>
@@ -280,6 +281,11 @@ const createStyles = (colors: ThemeColors) =>
     },
     header: {
       marginBottom: spacing.lg,
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
     },
     backButton: {
       flexDirection: "row",
