@@ -422,14 +422,14 @@ const createStyles = (colors: ThemeColors) =>
     },
     toast: {
       position: "absolute",
-      bottom: 100,
+      bottom: 70,
       left: spacing.lg,
       right: spacing.lg,
-      backgroundColor: colors.bgCard,
-      borderRadius: radius.md,
+      backgroundColor: colors.warning + "15",
+      borderRadius: radius.lg,
       padding: spacing.md,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.warning + "40",
       alignItems: "center",
     },
     toastText: {
