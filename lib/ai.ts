@@ -41,10 +41,22 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
+export interface CleanupResult {
+  content: string;
+  tokensIn: number;
+  tokensOut: number;
+  cost: number; // USD
+}
+
+// gpt-4o-mini pricing per 1M tokens
+const CLEANUP_INPUT_COST = 0.15; // $0.15 per 1M input tokens
+const CLEANUP_OUTPUT_COST = 0.60; // $0.60 per 1M output tokens
+
 /**
  * Use an LLM to clean up and organize messy note content.
+ * Returns cleaned content + token usage stats.
  */
-export async function cleanupNote(content: string): Promise<string> {
+export async function cleanupNote(content: string): Promise<CleanupResult> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("EXPO_PUBLIC_OPENAI_API_KEY is not set");
@@ -71,5 +83,14 @@ export async function cleanupNote(content: string): Promise<string> {
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const tokensIn = data.usage?.prompt_tokens ?? 0;
+  const tokensOut = data.usage?.completion_tokens ?? 0;
+  const cost = (tokensIn * CLEANUP_INPUT_COST + tokensOut * CLEANUP_OUTPUT_COST) / 1_000_000;
+
+  return {
+    content: data.choices[0].message.content,
+    tokensIn,
+    tokensOut,
+    cost,
+  };
 }

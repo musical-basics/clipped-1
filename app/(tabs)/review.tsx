@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Animated,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import SwipeCard from "../../components/SwipeCard";
 import MergeSheet from "../../components/MergeSheet";
@@ -27,6 +30,29 @@ export default function ReviewScreen() {
   const [mergeMatches, setMergeMatches] = useState<MatchResult[]>([]);
   const [mergeLoading, setMergeLoading] = useState(false);
 
+  // Toast state
+  const [toast, setToast] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<NodeJS.Timeout>();
+
+  const showToast = (message: string) => {
+    setToast(message);
+    toastOpacity.setValue(0);
+    Animated.timing(toastOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setToast(null));
+    }, 1500);
+  };
+
   const loadInboxNotes = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -44,9 +70,50 @@ export default function ReviewScreen() {
     setLoading(false);
   }, [user]);
 
+  // Auto-refresh when tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadInboxNotes();
+    }, [loadInboxNotes])
+  );
+
+  // Track current note in a ref for wheel handler
+  const remainingNotes = notes.slice(currentIndex);
+  const currentNoteRef = useRef<Note | null>(null);
+  currentNoteRef.current = remainingNotes[0] || null;
+
+  // Mouse wheel gestures (web)
+  const wheelProcessing = useRef(false);
   useEffect(() => {
-    loadInboxNotes();
-  }, [loadInboxNotes]);
+    if (Platform.OS !== "web") return;
+    const handleWheel = (e: WheelEvent) => {
+      if (wheelProcessing.current || !currentNoteRef.current) return;
+      const THRESHOLD = 50;
+      const note = currentNoteRef.current;
+
+      if (e.deltaY < -THRESHOLD) {
+        // Scroll up → merge
+        e.preventDefault();
+        wheelProcessing.current = true;
+        handleSwipeUp(note);
+        setTimeout(() => { wheelProcessing.current = false; }, 800);
+      } else if (e.deltaX > THRESHOLD) {
+        // Scroll right → keep
+        e.preventDefault();
+        wheelProcessing.current = true;
+        handleSwipeRight(note);
+        setTimeout(() => { wheelProcessing.current = false; }, 800);
+      } else if (e.deltaX < -THRESHOLD) {
+        // Scroll left → delete
+        e.preventDefault();
+        wheelProcessing.current = true;
+        handleSwipeLeft(note);
+        setTimeout(() => { wheelProcessing.current = false; }, 800);
+      }
+    };
+    document.addEventListener("wheel", handleWheel, { passive: false });
+    return () => document.removeEventListener("wheel", handleWheel);
+  }, [notes, currentIndex]);
 
   const advanceCard = () => {
     setTimeout(() => {
@@ -58,6 +125,7 @@ export default function ReviewScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await updateNoteStatus(note.id, "archived");
+      showToast("🗑 Deleted");
     } catch (err) {
       console.error("Archive error:", err);
     }
@@ -68,6 +136,7 @@ export default function ReviewScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await updateNoteStatus(note.id, "stored");
+      showToast("✅ Kept");
     } catch (err) {
       console.error("Store error:", err);
     }
@@ -101,6 +170,7 @@ export default function ReviewScreen() {
     try {
       await mergeNotes(parentId, mergeNote);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast("🔗 Merged");
     } catch (err) {
       console.error("Merge error:", err);
     }
@@ -119,8 +189,6 @@ export default function ReviewScreen() {
       advanceCard();
     }
   };
-
-  const remainingNotes = notes.slice(currentIndex);
 
   if (loading) {
     return (
@@ -213,6 +281,13 @@ export default function ReviewScreen() {
           })}
       </View>
 
+      {/* Toast */}
+      {toast && (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </Animated.View>
+      )}
+
       <MergeSheet
         visible={mergeNote !== null}
         matches={mergeMatches}
@@ -298,5 +373,21 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: fontSize.md,
     fontWeight: "700",
+  },
+  toast: {
+    position: "absolute",
+    bottom: 100,
+    alignSelf: "center",
+    backgroundColor: colors.bgElevated,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toastText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: "600",
   },
 });

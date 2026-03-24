@@ -1,11 +1,37 @@
-import { Tabs } from "expo-router";
-import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import { Tabs, useRouter, useSegments } from "expo-router";
+import { useEffect } from "react";
+import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth";
 import { colors, fontSize, spacing } from "../../lib/theme";
 
+const TAB_ROUTES = ["/(tabs)", "/(tabs)/review", "/(tabs)/vault"] as const;
+const TAB_NAMES = ["index", "review", "vault"];
+
 export default function TabLayout() {
   const { signOut } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  // Tab key to switch between tabs (web only)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        // Don't intercept if user is in an input with Cmd/Ctrl held (e.g. Cmd+Tab)
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+
+        const currentTab = (segments as string[])[1] || "index";
+        const currentIdx = TAB_NAMES.indexOf(currentTab as string);
+        const direction = e.shiftKey ? -1 : 1;
+        const nextIdx = (currentIdx + direction + TAB_ROUTES.length) % TAB_ROUTES.length;
+        router.replace(TAB_ROUTES[nextIdx]);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [segments, router]);
 
   return (
     <Tabs

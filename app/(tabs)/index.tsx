@@ -68,16 +68,28 @@ export default function CaptureScreen() {
   // Cmd+Enter / Ctrl+Enter to save (web)
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         e.preventDefault();
-        if (contentRef.current.trim()) {
-          handleSave();
+        e.stopPropagation();
+        const trimmed = contentRef.current.trim();
+        if (!trimmed || !user) return;
+        setSaving(true);
+        try {
+          await createNote(user.id, trimmed);
+          setContent("");
+          contentRef.current = "";
+          showSuccess();
+          inputRef.current?.focus();
+        } catch (err) {
+          console.error("Save error:", err);
+        } finally {
+          setSaving(false);
         }
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [user]);
 
   return (

@@ -21,7 +21,7 @@ import { generateAndStoreEmbedding } from "../../lib/notes";
 import { colors, fontSize, spacing, radius } from "../../lib/theme";
 import type { Note } from "../../lib/types";
 
-function debounce<T extends (...args: unknown[]) => unknown>(
+function debounce<T extends (...args: any[]) => any>(
   fn: T,
   delay: number
 ) {
@@ -41,10 +41,11 @@ export default function NoteDetailScreen() {
   const [cleaning, setCleaning] = useState(false);
   const [originalContent, setOriginalContent] = useState<string | null>(null);
   const [showUndo, setShowUndo] = useState(false);
+  const [cleanupCost, setCleanupCost] = useState<{ tokensIn: number; tokensOut: number; cost: number } | null>(null);
   const undoTimer = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    loadNote();
+    if (id) loadNote();
   }, [id]);
 
   const loadNote = async () => {
@@ -81,10 +82,11 @@ export default function NoteDetailScreen() {
 
     setCleaning(true);
     try {
-      const cleaned = await cleanupNote(content);
+      const result = await cleanupNote(content);
       setOriginalContent(content);
-      setContent(cleaned);
-      await updateNoteContent(id, cleaned);
+      setContent(result.content);
+      setCleanupCost({ tokensIn: result.tokensIn, tokensOut: result.tokensOut, cost: result.cost });
+      await updateNoteContent(id, result.content);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // Show undo option for 10 seconds
@@ -92,6 +94,7 @@ export default function NoteDetailScreen() {
       undoTimer.current = setTimeout(() => {
         setShowUndo(false);
         setOriginalContent(null);
+        setCleanupCost(null);
       }, 10000);
     } catch (err) {
       Alert.alert("Cleanup Failed", "Please try again.");
@@ -108,6 +111,7 @@ export default function NoteDetailScreen() {
     await updateNoteContent(id, originalContent);
     setOriginalContent(null);
     setShowUndo(false);
+    setCleanupCost(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -158,13 +162,18 @@ export default function NoteDetailScreen() {
       </ScrollView>
 
       <View style={styles.bottomBar}>
-        {showUndo && (
-          <TouchableOpacity style={styles.undoButton} onPress={handleUndo}>
-            <Text style={styles.undoText}>↩ Undo Cleanup</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={{ flex: 1 }} />
+        <View style={styles.bottomLeft}>
+          {showUndo && (
+            <TouchableOpacity style={styles.undoButton} onPress={handleUndo}>
+              <Text style={styles.undoText}>↩ Undo Cleanup</Text>
+            </TouchableOpacity>
+          )}
+          {cleanupCost && (
+            <Text style={styles.costText}>
+              {cleanupCost.tokensIn}↓ {cleanupCost.tokensOut}↑ · ${cleanupCost.cost.toFixed(4)}
+            </Text>
+          )}
+        </View>
 
         <TouchableOpacity
           style={[styles.cleanupButton, cleaning && styles.cleanupDisabled]}
@@ -222,10 +231,17 @@ const styles = StyleSheet.create({
   bottomBar: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: spacing.md,
     paddingBottom: spacing.xl,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  bottomLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flex: 1,
   },
   undoButton: {
     backgroundColor: colors.warning + "20",
@@ -253,5 +269,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: fontSize.md,
     fontWeight: "700",
+  },
+  costText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
   },
 });
