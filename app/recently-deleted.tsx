@@ -99,7 +99,7 @@ export default function RecentlyDeletedScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.push("/(tabs)/settings")}
+          onPress={() => router.push("/user/settings")}
         >
           <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
           <Text style={styles.backText}>Settings</Text>

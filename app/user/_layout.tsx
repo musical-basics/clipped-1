@@ -6,9 +6,9 @@ import { useAuth } from "../../lib/auth";
 import { useThemeColors } from "../../lib/ThemeContext";
 
 const TAB_ROUTES = [
-  "/(tabs)/capture",
-  "/(tabs)/review",
-  "/(tabs)/vault",
+  "/user/capture",
+  "/user/review",
+  "/user/vault",
 ] as const;
 const TAB_NAMES = ["capture", "review", "vault"];
 

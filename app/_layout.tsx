@@ -35,7 +35,7 @@ function AuthGate() {
         }}
       >
         <Stack.Screen name="auth" options={{ animation: "fade" }} />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="user" />
         <Stack.Screen
           name="note/[id]"
           options={{

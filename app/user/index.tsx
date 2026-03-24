@@ -21,7 +21,7 @@ export default function HomeScreen() {
 
       <TouchableOpacity
         style={styles.startButton}
-        onPress={() => router.push("/(tabs)/capture")}
+        onPress={() => router.push("/user/capture")}
         activeOpacity={0.8}
       >
         <Ionicons name="flash" size={24} color="#FFFFFF" />
@@ -30,7 +30,7 @@ export default function HomeScreen() {
 
       <TouchableOpacity
         style={styles.settingsLink}
-        onPress={() => router.push("/(tabs)/settings")}
+        onPress={() => router.push("/user/settings")}
         activeOpacity={0.7}
       >
         <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />

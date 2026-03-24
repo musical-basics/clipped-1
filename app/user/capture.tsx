@@ -174,7 +174,7 @@ export default function CaptureScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace("/(tabs)")}
+            onPress={() => router.replace("/user")}
           >
             <Ionicons
               name="arrow-back"

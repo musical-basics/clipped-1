@@ -338,7 +338,7 @@ export default function ReviewScreen() {
         <View>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace("/(tabs)")}
+            onPress={() => router.replace("/user")}
           >
             <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
             <Text style={styles.backText}>Home</Text>
