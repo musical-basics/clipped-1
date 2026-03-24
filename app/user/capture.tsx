@@ -308,6 +308,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     textInput: {
       flex: 1,
+      minHeight: 200,
       color: colors.textPrimary,
       fontSize: fontSize.lg,
       lineHeight: 28,
