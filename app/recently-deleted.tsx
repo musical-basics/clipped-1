@@ -60,15 +60,6 @@ export default function RecentlyDeletedScreen() {
   };
 
   const handlePermanentDelete = async (noteId: string) => {
-    const confirmed = Platform.OS === "web"
-      ? window.confirm("Permanently delete this note? This cannot be undone.")
-      : await new Promise<boolean>((resolve) =>
-          Alert.alert("Delete Forever", "This cannot be undone.", [
-            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-            { text: "Delete", style: "destructive", onPress: () => resolve(true) },
-          ])
-        );
-    if (!confirmed) return;
     await supabase.from("notes").delete().eq("id", noteId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
@@ -108,7 +99,7 @@ export default function RecentlyDeletedScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.push("/(tabs)/settings")}
         >
           <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
           <Text style={styles.backText}>Settings</Text>
