@@ -15,6 +15,7 @@ import { colors, fontSize, spacing, radius } from "../../lib/theme";
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const [backfilling, setBackfilling] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -55,6 +56,51 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.themeToggle}>
+          <TouchableOpacity
+            style={[
+              styles.themeOption,
+              theme === "dark" && styles.themeOptionActive,
+            ]}
+            onPress={() => setTheme("dark")}
+          >
+            <Text
+              style={[
+                styles.themeOptionText,
+                theme === "dark" && styles.themeOptionTextActive,
+              ]}
+            >
+              🌙 Dark
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.themeOption,
+              theme === "light" && styles.themeOptionActive,
+            ]}
+            onPress={() => {
+              setTheme("light");
+              Alert.alert(
+                "Coming Soon",
+                "Light mode is coming in a future update!"
+              );
+              setTheme("dark");
+            }}
+          >
+            <Text
+              style={[
+                styles.themeOptionText,
+                theme === "light" && styles.themeOptionTextActive,
+              ]}
+            >
+              ☀️ Light
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Tools</Text>
         <TouchableOpacity
           style={styles.card}
@@ -85,7 +131,7 @@ export default function SettingsScreen() {
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>TriageNotes v1.0.0</Text>
+      <Text style={styles.version}>Clipped v1.0.0</Text>
     </SafeAreaView>
   );
 }
@@ -142,6 +188,31 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSize.sm,
     lineHeight: 20,
+  },
+  themeToggle: {
+    flexDirection: "row",
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.lg,
+    padding: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  themeOption: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+    borderRadius: radius.md,
+  },
+  themeOptionActive: {
+    backgroundColor: colors.accent,
+  },
+  themeOptionText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: "600",
+  },
+  themeOptionTextActive: {
+    color: colors.textPrimary,
   },
   signOutButton: {
     backgroundColor: colors.error + "20",

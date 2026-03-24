@@ -8,6 +8,7 @@ import {
   TextInput,
   RefreshControl,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -64,19 +65,19 @@ export default function VaultScreen() {
     setRefreshing(false);
   };
 
-  const handleDelete = (noteId: string) => {
-    Alert.alert("Archive Note", "Move this note to archive?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Archive",
-        style: "destructive",
-        onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          await updateNoteStatus(noteId, "archived");
-          setNotes((prev) => prev.filter((n) => n.id !== noteId));
-        },
-      },
-    ]);
+  const handleDelete = async (noteId: string) => {
+    const confirmed = Platform.OS === "web"
+      ? window.confirm("Archive this note?")
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert("Archive Note", "Move this note to archive?", [
+            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+            { text: "Archive", style: "destructive", onPress: () => resolve(true) },
+          ])
+        );
+    if (!confirmed) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await updateNoteStatus(noteId, "archived");
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
   };
 
   const filteredNotes = search.trim()
@@ -94,16 +95,26 @@ export default function VaultScreen() {
       <TouchableOpacity
         style={styles.noteCard}
         onPress={() => router.push(`/note/${item.id}`)}
-        onLongPress={() => handleDelete(item.id)}
         activeOpacity={0.7}
       >
-        <Text style={styles.noteTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={styles.notePreview} numberOfLines={2}>
-          {preview}
-        </Text>
-        <Text style={styles.noteTime}>{timeAgo(item.updated_at)}</Text>
+        <View style={styles.noteCardContent}>
+          <View style={styles.noteCardLeft}>
+            <Text style={styles.noteTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.notePreview} numberOfLines={2}>
+              {preview}
+            </Text>
+            <Text style={styles.noteTime}>{timeAgo(item.updated_at)}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.noteDeleteBtn}
+            onPress={() => handleDelete(item.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.noteDeleteText}>🗑</Text>
+          </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -225,6 +236,28 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  noteCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  noteCardLeft: {
+    flex: 1,
+  },
+  noteDeleteBtn: {
+    backgroundColor: colors.error + "30",
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.error + "50",
+  },
+  noteDeleteText: {
+    fontSize: 14,
+    color: colors.error,
   },
   noteTitle: {
     color: colors.textPrimary,

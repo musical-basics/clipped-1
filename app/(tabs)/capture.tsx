@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { createNote } from "../../lib/notes";
+import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { colors, fontSize, spacing, radius } from "../../lib/theme";
 
@@ -29,6 +30,24 @@ export default function CaptureScreen() {
   const checkmarkOpacity = useRef(new Animated.Value(0)).current;
   const contentRef = useRef(content);
   contentRef.current = content;
+
+  // Recent notes
+  const [recentNotes, setRecentNotes] = useState<{ id: string; content: string }[]>([]);
+
+  const loadRecentNotes = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("notes")
+      .select("id, content")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(3);
+    if (data) setRecentNotes(data);
+  }, [user]);
+
+  useEffect(() => {
+    loadRecentNotes();
+  }, [loadRecentNotes]);
 
   // Flying note animation state
   const [flyingText, setFlyingText] = useState<string | null>(null);
@@ -104,6 +123,7 @@ export default function CaptureScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showSuccess();
       inputRef.current?.focus();
+      loadRecentNotes();
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       console.error("Save error:", err);
@@ -202,6 +222,17 @@ export default function CaptureScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {recentNotes.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.recentLabel}>Recent</Text>
+            {recentNotes.map((n) => (
+              <Text key={n.id} style={styles.recentNote} numberOfLines={1}>
+                {n.content.slice(0, 40)}{n.content.length > 40 ? "…" : ""}
+              </Text>
+            ))}
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Flying note animation */}
@@ -337,5 +368,24 @@ const styles = StyleSheet.create({
   flyingNoteText: {
     color: colors.textPrimary,
     fontSize: fontSize.sm,
+  },
+  recentSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  recentLabel: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  recentNote: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    paddingVertical: spacing.xs,
   },
 });

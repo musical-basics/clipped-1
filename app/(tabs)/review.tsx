@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -173,6 +174,49 @@ export default function ReviewScreen() {
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
   };
 
+  // Action animation state
+  const [actionAnim, setActionAnim] = useState<{ text: string; type: "delete" | "keep" } | null>(null);
+  const actionX = useRef(new Animated.Value(0)).current;
+  const actionY = useRef(new Animated.Value(0)).current;
+  const actionOpacity = useRef(new Animated.Value(0)).current;
+  const actionScale = useRef(new Animated.Value(1)).current;
+
+  const playActionAnim = (text: string, type: "delete" | "keep", onDone: () => void) => {
+    const preview = text.length > 30 ? text.slice(0, 30) + "…" : text;
+    setActionAnim({ text: preview, type });
+    actionX.setValue(0);
+    actionY.setValue(0);
+    actionOpacity.setValue(1);
+    actionScale.setValue(1);
+
+    if (type === "delete") {
+      // Shrink and fly to bottom-left (trashcan)
+      Animated.parallel([
+        Animated.timing(actionX, { toValue: -SCREEN_WIDTH * 0.35, duration: 450, useNativeDriver: true }),
+        Animated.timing(actionY, { toValue: 200, duration: 450, useNativeDriver: true }),
+        Animated.timing(actionScale, { toValue: 0.15, duration: 450, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(250),
+          Animated.timing(actionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        ]),
+      ]).start(() => setActionAnim(null));
+    } else {
+      // Fly right off screen (toward vault)
+      Animated.parallel([
+        Animated.timing(actionX, { toValue: SCREEN_WIDTH + 50, duration: 500, useNativeDriver: true }),
+        Animated.timing(actionY, { toValue: -20, duration: 500, useNativeDriver: true }),
+        Animated.timing(actionScale, { toValue: 0.4, duration: 500, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(300),
+          Animated.timing(actionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        ]),
+      ]).start(() => setActionAnim(null));
+    }
+
+    // Don't wait for anim to finish before advancing
+    setTimeout(onDone, 100);
+  };
+
   const handleSwipeLeft = async (note: Note) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -181,7 +225,11 @@ export default function ReviewScreen() {
     } catch (err) {
       console.error("Archive error:", err);
     }
-    viewMode === "card" ? advanceCard() : removeFromGrid(note.id);
+    if (viewMode === "card") {
+      playActionAnim(note.content, "delete", advanceCard);
+    } else {
+      removeFromGrid(note.id);
+    }
   };
 
   const handleSwipeRight = async (note: Note) => {
@@ -192,7 +240,11 @@ export default function ReviewScreen() {
     } catch (err) {
       console.error("Store error:", err);
     }
-    viewMode === "card" ? advanceCard() : removeFromGrid(note.id);
+    if (viewMode === "card") {
+      playActionAnim(note.content, "keep", advanceCard);
+    } else {
+      removeFromGrid(note.id);
+    }
   };
 
   const handleSwipeUp = async (note: Note) => {
@@ -430,6 +482,29 @@ export default function ReviewScreen() {
           ))}
         </ScrollView>
       )}
+      {/* Action animation (delete / keep) */}
+      {actionAnim && (
+        <Animated.View
+          style={[
+            styles.actionAnim,
+            {
+              opacity: actionOpacity,
+              transform: [
+                { translateX: actionX },
+                { translateY: actionY },
+                { scale: actionScale },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.actionAnimIcon}>
+            {actionAnim.type === "delete" ? "🗑" : "📦"}
+          </Text>
+          <Text style={styles.actionAnimText} numberOfLines={1}>
+            {actionAnim.text}
+          </Text>
+        </Animated.View>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -565,6 +640,34 @@ const styles = StyleSheet.create({
   gridActionText: {
     fontSize: fontSize.md,
     fontWeight: "700",
+  },
+  // Action animation
+  actionAnim: {
+    position: "absolute",
+    top: "40%",
+    left: spacing.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: 220,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  actionAnimIcon: {
+    fontSize: 20,
+  },
+  actionAnimText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.sm,
+    flex: 1,
   },
   // Empty state
   emptyEmoji: {

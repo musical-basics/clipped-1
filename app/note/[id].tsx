@@ -10,16 +10,20 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { supabase } from "../../lib/supabase";
-import { updateNoteContent } from "../../lib/notes";
+import { updateNoteContent, updateNoteStatus } from "../../lib/notes";
 import { cleanupNote } from "../../lib/ai";
 import { generateAndStoreEmbedding } from "../../lib/notes";
 import { colors, fontSize, spacing, radius } from "../../lib/theme";
 import type { Note } from "../../lib/types";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 function debounce<T extends (...args: any[]) => any>(
   fn: T,
@@ -43,6 +47,12 @@ export default function NoteDetailScreen() {
   const [showUndo, setShowUndo] = useState(false);
   const [cleanupCost, setCleanupCost] = useState<{ tokensIn: number; tokensOut: number; cost: number } | null>(null);
   const undoTimer = useRef<NodeJS.Timeout>();
+
+  // Delete animation
+  const [deleting, setDeleting] = useState(false);
+  const deleteScale = useRef(new Animated.Value(1)).current;
+  const deleteX = useRef(new Animated.Value(0)).current;
+  const deleteOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (id) loadNote();
@@ -89,7 +99,6 @@ export default function NoteDetailScreen() {
       await updateNoteContent(id, result.content);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Show undo option for 10 seconds
       setShowUndo(true);
       undoTimer.current = setTimeout(() => {
         setShowUndo(false);
@@ -115,6 +124,34 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  const handleDelete = async () => {
+    if (!id) return;
+    const confirmed = Platform.OS === "web"
+      ? window.confirm("Delete this note? It will be archived.")
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert("Delete Note", "This note will be archived.", [
+            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+            { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+          ])
+        );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await updateNoteStatus(id, "archived");
+
+    Animated.parallel([
+      Animated.timing(deleteScale, { toValue: 0.1, duration: 400, useNativeDriver: true }),
+      Animated.timing(deleteX, { toValue: -SCREEN_WIDTH * 0.4, duration: 400, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.delay(200),
+        Animated.timing(deleteOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]),
+    ]).start(() => {
+      router.back();
+    });
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -136,59 +173,80 @@ export default function NoteDetailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: deleteOpacity,
+          transform: [
+            { scale: deleteScale },
+            { translateX: deleteX },
+          ],
+        },
+      ]}
     >
-      <View style={styles.metaBar}>
-        <Text style={styles.metaText}>
-          Last updated: {new Date(note.updated_at).toLocaleDateString()}
-        </Text>
-        <Text style={styles.metaText}>{content.length} chars</Text>
-      </View>
-
-      <ScrollView style={styles.scrollContainer} keyboardDismissMode="on-drag">
-        <TextInput
-          style={styles.contentInput}
-          value={content}
-          onChangeText={handleContentChange}
-          multiline
-          scrollEnabled={false}
-          textAlignVertical="top"
-          placeholder="Write something..."
-          placeholderTextColor={colors.textMuted}
-        />
-      </ScrollView>
-
-      <View style={styles.bottomBar}>
-        <View style={styles.bottomLeft}>
-          {showUndo && (
-            <TouchableOpacity style={styles.undoButton} onPress={handleUndo}>
-              <Text style={styles.undoText}>↩ Undo Cleanup</Text>
-            </TouchableOpacity>
-          )}
-          {cleanupCost && (
-            <Text style={styles.costText}>
-              {cleanupCost.tokensIn}↓ {cleanupCost.tokensOut}↑ · ${cleanupCost.cost.toFixed(4)}
-            </Text>
-          )}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
+        <View style={styles.metaBar}>
+          <Text style={styles.metaText}>
+            Last updated: {new Date(note.updated_at).toLocaleDateString()}
+          </Text>
+          <Text style={styles.metaText}>{content.length} chars</Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.cleanupButton, cleaning && styles.cleanupDisabled]}
-          onPress={handleCleanup}
-          disabled={cleaning}
-          activeOpacity={0.8}
-        >
-          {cleaning ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
-          ) : (
-            <Text style={styles.cleanupText}>✨ Clean Up</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        <ScrollView style={styles.scrollContainer} keyboardDismissMode="on-drag">
+          <TextInput
+            style={styles.contentInput}
+            value={content}
+            onChangeText={handleContentChange}
+            multiline
+            scrollEnabled={false}
+            textAlignVertical="top"
+            placeholder="Write something..."
+            placeholderTextColor={colors.textMuted}
+          />
+        </ScrollView>
+
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomLeft}>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDelete}
+              disabled={deleting}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.deleteText}>🗑</Text>
+            </TouchableOpacity>
+            {showUndo && (
+              <TouchableOpacity style={styles.undoButton} onPress={handleUndo}>
+                <Text style={styles.undoText}>↩ Undo</Text>
+              </TouchableOpacity>
+            )}
+            {cleanupCost && (
+              <Text style={styles.costText}>
+                {cleanupCost.tokensIn}↓ {cleanupCost.tokensOut}↑ · ${cleanupCost.cost.toFixed(4)}
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.cleanupButton, cleaning && styles.cleanupDisabled]}
+            onPress={handleCleanup}
+            disabled={cleaning}
+            activeOpacity={0.8}
+          >
+            {cleaning ? (
+              <ActivityIndicator size="small" color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.cleanupText}>✨ Clean Up</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 
@@ -242,6 +300,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     flex: 1,
+  },
+  deleteButton: {
+    backgroundColor: colors.error + "20",
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.error + "30",
+  },
+  deleteText: {
+    fontSize: 18,
   },
   undoButton: {
     backgroundColor: colors.warning + "20",
