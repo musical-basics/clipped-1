@@ -122,7 +122,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     helpLinkText: {
       color: colors.textMuted,
-      fontSize: fontSize.sm,
-      fontWeight: "500",
+      fontSize: fontSize.md,
+      fontWeight: "600",
     },
   });

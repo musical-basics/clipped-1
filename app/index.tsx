@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Platform, ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
@@ -16,7 +16,7 @@ const KEEP_COLOR = "#00D68F";
 const MERGE_COLOR = "#4DA6FF";
 
 /* ─── Navbar ─── */
-function Navbar() {
+function Navbar({ onFeatures, onPricing, onGetAccess }: { onFeatures: () => void; onPricing: () => void; onGetAccess: () => void }) {
   return (
     <View style={s.navOuter}>
       <View style={s.navInner}>
@@ -25,17 +25,17 @@ function Navbar() {
           <Text style={s.logoText}>Clipped</Text>
         </View>
         <View style={s.navLinks}>
-          <Text style={s.navLink}>Features</Text>
-          <Text style={s.navLink}>Pricing</Text>
+          <TouchableOpacity onPress={onFeatures}><Text style={s.navLink}>Features</Text></TouchableOpacity>
+          <TouchableOpacity onPress={onPricing}><Text style={s.navLink}>Pricing</Text></TouchableOpacity>
         </View>
-        <TouchableOpacity style={s.navCta}><Text style={s.navCtaText}>Get Access</Text></TouchableOpacity>
+        <TouchableOpacity style={s.navCta} onPress={onGetAccess}><Text style={s.navCtaText}>Get Access</Text></TouchableOpacity>
       </View>
     </View>
   );
 }
 
 /* ─── Hero ─── */
-function Hero() {
+function Hero({ onGetAccess }: { onGetAccess: () => void }) {
   return (
     <View style={s.heroWrap}>
       <View style={s.heroGlow1} />
@@ -53,7 +53,7 @@ function Hero() {
           Frictionless capture meets Tinder-style triage. Use AI to automatically merge, clean, and organize your scattered thoughts.
         </Text>
         <View style={s.heroCtas}>
-          <TouchableOpacity style={s.heroPrimaryBtn}>
+          <TouchableOpacity style={s.heroPrimaryBtn} onPress={onGetAccess}>
             <Text style={s.heroPrimaryBtnText}>Get Early Access (Free)</Text>
             <Ionicons name="arrow-forward" size={18} color="#FFF" />
           </TouchableOpacity>
@@ -293,13 +293,31 @@ function Footer() {
 
 /* ─── Main Page ─── */
 export default function LandingPage() {
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionYs = useRef<Record<string, number>>({});
+
+  const scrollToSection = (key: string) => {
+    const y = sectionYs.current[key];
+    if (y != null && scrollRef.current) {
+      scrollRef.current.scrollTo({ y, animated: true });
+    }
+  };
+
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.pageContent}>
-      <Navbar />
-      <Hero />
-      <BentoGrid />
+    <ScrollView ref={scrollRef} style={s.page} contentContainerStyle={s.pageContent}>
+      <Navbar
+        onFeatures={() => scrollToSection("features")}
+        onPricing={() => scrollToSection("pricing")}
+        onGetAccess={() => scrollToSection("pricing")}
+      />
+      <Hero onGetAccess={() => scrollToSection("pricing")} />
+      <View onLayout={(e) => { sectionYs.current.features = e.nativeEvent.layout.y; }}>
+        <BentoGrid />
+      </View>
       <HowItWorks />
-      <Pricing />
+      <View onLayout={(e) => { sectionYs.current.pricing = e.nativeEvent.layout.y; }}>
+        <Pricing />
+      </View>
       <Footer />
     </ScrollView>
   );
