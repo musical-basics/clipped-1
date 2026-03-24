@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth";
 import { colors, fontSize, spacing, radius } from "../lib/theme";
 
-const DEV_EMAIL = "test@test.com";
+const DEV_EMAIL = "yulionel829@gmail.com";
 const DEV_PASSWORD = "test123456";
 
 export default function AuthScreen() {
@@ -153,7 +153,7 @@ export default function AuthScreen() {
               <ActivityIndicator color={colors.textPrimary} />
             ) : (
               <Text style={styles.devButtonText}>
-                ⚡ Dev Login (test@test.com)
+                ⚡ Dev Login (yulionel829@gmail.com)
               </Text>
             )}
           </TouchableOpacity>
