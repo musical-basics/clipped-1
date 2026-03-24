@@ -44,6 +44,7 @@ export default function CaptureScreen() {
       .from("notes")
       .select("id, content")
       .eq("user_id", user.id)
+      .in("status", ["inbox", "stored"])
       .order("created_at", { ascending: false })
       .limit(3);
     if (data) setRecentNotes(data);
