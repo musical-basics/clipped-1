@@ -37,6 +37,15 @@ export default function HomeScreen() {
         <Text style={styles.settingsLinkText}>Settings</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={styles.helpLink}
+        onPress={() => router.push("/user/settings")}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="help-circle-outline" size={18} color={colors.textMuted} />
+        <Text style={styles.helpLinkText}>Help</Text>
+      </TouchableOpacity>
+
       <View style={{ flex: 1 }} />
 
       <Text style={styles.version}>Clipped v1.0.0</Text>
@@ -75,9 +84,9 @@ const createStyles = (colors: ThemeColors) =>
       gap: spacing.sm,
       paddingVertical: spacing.lg,
       borderRadius: radius.xl,
-      shadowColor: colors.accent,
+      shadowColor: "#000",
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
+      shadowOpacity: 0.15,
       shadowRadius: 12,
       elevation: 8,
     },
@@ -103,5 +112,17 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       textAlign: "center",
       marginBottom: spacing.md,
+    },
+    helpLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.xs,
+      marginTop: spacing.sm,
+    },
+    helpLinkText: {
+      color: colors.textMuted,
+      fontSize: fontSize.sm,
+      fontWeight: "500",
     },
   });

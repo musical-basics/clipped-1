@@ -2,7 +2,7 @@ import React, { useCallback, useState, useMemo } from "react";
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   StyleSheet,
   TextInput,
@@ -33,6 +33,19 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
+function getDayLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const noteDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today.getTime() - noteDay.getTime()) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: now.getFullYear() !== date.getFullYear() ? "numeric" : undefined });
+}
+
+const PAGE_SIZE = 25;
+
 export default function VaultScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -43,20 +56,28 @@ export default function VaultScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleteToast, setDeleteToast] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [hasMore, setHasMore] = useState(true);
 
-  const loadNotes = useCallback(async () => {
+  const loadNotes = useCallback(async (append = false) => {
     if (!user) return;
+    const offset = append ? notes.length : 0;
     const { data, error } = await supabase
       .from("notes")
       .select("*")
       .eq("user_id", user.id)
       .eq("status", "stored")
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
 
     if (!error && data) {
-      setNotes(data as Note[]);
+      if (append) {
+        setNotes((prev) => [...prev, ...(data as Note[])]);
+      } else {
+        setNotes(data as Note[]);
+      }
+      setHasMore(data.length === PAGE_SIZE);
     }
-  }, [user]);
+  }, [user, notes.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,7 +87,7 @@ export default function VaultScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadNotes();
+    await loadNotes(false);
     setRefreshing(false);
   };
 
@@ -83,6 +104,17 @@ export default function VaultScreen() {
         n.content.toLowerCase().includes(search.toLowerCase())
       )
     : notes;
+
+  // Group by day
+  const sections = useMemo(() => {
+    const groups: Record<string, Note[]> = {};
+    for (const note of filteredNotes) {
+      const label = getDayLabel(note.updated_at);
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(note);
+    }
+    return Object.entries(groups).map(([title, data]) => ({ title, data }));
+  }, [filteredNotes]);
 
   const renderListItem = ({ item }: { item: Note }) => {
     const lines = item.content.split("\n");
@@ -200,18 +232,32 @@ export default function VaultScreen() {
           </Text>
         </View>
       ) : viewMode === "list" ? (
-        <FlatList
-          data={filteredNotes}
+        <SectionList
+          sections={sections}
           keyExtractor={(item) => item.id}
           renderItem={renderListItem}
+          renderSectionHeader={({ section: { title } }) => (
+            <Text style={styles.sectionHeader}>{title}</Text>
+          )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          stickySectionHeadersEnabled={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor={colors.accent}
             />
+          }
+          ListFooterComponent={
+            hasMore && !search.trim() ? (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={() => loadNotes(true)}
+              >
+                <Text style={styles.loadMoreText}>Load More</Text>
+              </TouchableOpacity>
+            ) : null
           }
         />
       ) : (
@@ -308,6 +354,15 @@ const createStyles = (colors: ThemeColors) =>
       paddingBottom: spacing.xxl,
       gap: spacing.sm,
     },
+    sectionHeader: {
+      color: colors.textMuted,
+      fontSize: fontSize.xs,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+    },
     noteCard: {
       backgroundColor: colors.bgCard,
       borderRadius: radius.lg,
@@ -399,6 +454,16 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.error + "40",
     },
     // Empty + Toast
+    loadMoreBtn: {
+      alignItems: "center",
+      paddingVertical: spacing.md,
+      marginTop: spacing.sm,
+    },
+    loadMoreText: {
+      color: colors.accent,
+      fontSize: fontSize.sm,
+      fontWeight: "700",
+    },
     emptyContainer: {
       flex: 1,
       justifyContent: "center",
